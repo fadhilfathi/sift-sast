@@ -90,6 +90,38 @@ prompt text, so no model output can bypass it.
 - **Markdown PR comment** — grouped by verdict, true positives first.
 - **JSON run report** — cost, latency, verdict distribution, model IDs, prompt hashes.
 
+### Measured: GitHub ignores SARIF suppressions
+
+Verified in P1 against a real repository, not inferred from documentation. Both
+suppression kinds were uploaded together through the code-scanning API:
+
+| Suppression | `status` | Result |
+| --- | --- | --- |
+| `kind: "external"` | `accepted` | alert came back **open** |
+| `kind: "inSource"` | `accepted` | alert came back **open** |
+
+Five findings uploaded, five alerts open, zero dismissed. Locations, line numbers,
+and `security-severity` all survived intact; only the suppressions were dropped.
+Reproduce with the `Verify SARIF upload` workflow in
+[`fadhilfathi/sarif-upload-check`](https://github.com/fadhilfathi/sarif-upload-check).
+
+Consequences for P5 and P6:
+
+1. A `Suppression` in emitted SARIF is **inert on GitHub**. We still write it,
+   because it is the interop-correct place for the justification and other
+   consumers read it — but it will not dismiss an alert on its own.
+2. Dismissing a Code Scanning alert requires a **separate authenticated call**:
+   `PATCH /repos/{owner}/{repo}/code-scanning/alerts/{number}` with
+   `state=dismissed` and a `dismissed_reason`. That is an additional, explicitly
+   granted permission, and the Action must treat it as opt-in.
+3. This is the safe direction to be wrong in. The failure mode is a dismissal that
+   does not take effect and leaves an alert visible, not a real vulnerability
+   silently disappearing from someone's dashboard.
+
+Because the dismissal path runs through an alert-number API rather than through the
+SARIF document, the correlation ID cannot be what addresses it. GitHub's alert
+identity is — which is the second reason D1 refuses to compete with it.
+
 ## Trust boundary
 
 ```

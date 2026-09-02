@@ -26,24 +26,48 @@ Tag nothing.
 
 ---
 
-## ☐ P1 — SARIF ingest and emit, lossless round-trip
+## ☑ P1 — SARIF ingest and emit, lossless round-trip
 
-No LLM.
+No LLM. Nothing tagged.
 
 **Acceptance criteria**
 
-- [ ] `sift.ingest` parses SARIF 2.1.0 into `SarifLog`; unknown keys survive
-- [ ] `sift.emit.sarif` writes it back
-- [ ] Property test (hypothesis) over **20 real SARIF fixtures** from Semgrep and
-      CodeQL: `parse(emit(parse(x))) == parse(x)`, and unknown keys are byte-identical
-- [ ] Output validates against the official SARIF 2.1.0 JSON schema
-- [ ] Output **accepted by GitHub Code Scanning** — verified by an actual upload,
-      not assumed
-- [ ] Stable per-finding fingerprint; documented and tested for stability across
-      line-number shifts
+- [x] `sift.ingest` parses SARIF 2.1.0 into `SarifLog`; unknown keys survive
+- [x] `sift.emit.sarif` writes it back
+- [x] Property test over the corpus plus Hypothesis-generated documents:
+      `parse(emit(parse(x))) == parse(x)` under the D2 canonicalization
+- [x] Output validates against the official SARIF 2.1.0 JSON schema; deviations
+      recorded in `evals/fixtures/SCHEMA_DEVIATIONS.md` rather than patched
+- [x] **Accepted by GitHub Code Scanning** — uploaded for real, alerts read back
+      and asserted
+- [x] Stable per-finding correlation ID (D1) with the stability matrix tested
+- [x] `sift triage --dry-run` runs parse, fingerprint, emit and prints counts
+- [x] `make gate` green, CI green on `main`
 
-**Done means:** a SARIF file makes the full round trip with zero loss and the
-result renders in Code Scanning.
+**Corpus:** 20 fixtures — 12 generated from Semgrep 1.176.0 and CodeQL v2.26.4
+against four pinned OSS repos, 8 handcrafted adversarial. 135 findings.
+
+**Scope notes**
+
+- *Byte-identity was dropped in favour of semantic equality* (D2). Measured: 0 of
+  20 fixtures round-trip byte-identically, 20 of 20 do semantically. A
+  byte-identical assertion would have been relaxed within a week.
+- *All 12 real-scanner fixtures pass the official schema.* The deviation list was
+  written expecting upstream violations and found none; the only two entries are
+  handcrafted fixtures that are invalid on purpose. A test fails the build if a
+  future scanner version changes that.
+- *The schema sets `additionalProperties: false`*, which independently requires
+  what D1 chose for other reasons — SIFT's own data goes in the `properties` bag
+  and nowhere else.
+- **GitHub ignores SARIF `suppressions`, both `external` and `inSource`.**
+  Measured, not assumed. Dismissal in P6 must go through
+  `PATCH /code-scanning/alerts/{number}`, which is a separate permission and must
+  be opt-in. See `docs/ARCHITECTURE.md`.
+- *The cache key is specified but not implemented.* It cannot be, until
+  `ContextBundle` is populated (P3) and prompts exist (P5).
+- *Positional identity is a live gap.* Findings with no snippet and no tool
+  fingerprint fall back to a line-number identity that detaches on any shift. The
+  CLI warns; P3's context builder resolves it by supplying the real source line.
 
 ---
 

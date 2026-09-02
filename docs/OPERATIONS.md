@@ -44,6 +44,53 @@ Until then `main` is protected by convention only: `make gate` before every push
 and CI watched to green after. That is weaker than enforcement. Do not treat a
 green badge as a substitute for running the gate locally.
 
+## Verifying the SARIF emitter against Code Scanning
+
+SIFT must emit SARIF that GitHub Code Scanning accepts **and renders**. A `202`
+from the upload endpoint is not evidence of that: a SARIF file can be accepted and
+then processed into nothing. The check is only meaningful if the alerts are read
+back and asserted.
+
+`sift` stays private, so verification runs in a permanent public companion repo:
+[`fadhilfathi/sarif-upload-check`](https://github.com/fadhilfathi/sarif-upload-check).
+It is reused at P6 for the Action end-to-end test and any time the emitter changes.
+
+### Procedure
+
+1. Edit `sarif/input.sarif` in that repo if the case being tested has changed, and
+   make sure every line number it references exists in `src/app.py`.
+2. Regenerate the emitted file with the SIFT build under test:
+
+   ```bash
+   sift triage sarif/input.sarif --out sarif/emitted.sarif --dry-run
+   ```
+
+3. Commit and push. The `Verify SARIF upload` workflow runs on any change to
+   `sarif/emitted.sarif` or `src/`, and can also be dispatched manually.
+4. Watch it: `gh run watch <id> -R fadhilfathi/sarif-upload-check`
+
+The workflow uploads through the code-scanning API, polls
+`/code-scanning/sarifs/{id}` until `processing_status` is `complete`, then reads
+`/code-scanning/alerts` back and asserts on rule IDs, file paths, line numbers,
+`security_severity_level`, and open/dismissed state.
+
+Upload needs the `security_events` scope. The workflow uses `GITHUB_TOKEN` with
+`security-events: write`, so no personal token needs that scope. A local `gh` will
+not be able to upload unless you run `gh auth refresh -s security_events`.
+
+### What it has established
+
+| Question | Answer | When |
+| --- | --- | --- |
+| Does emitted SARIF upload and process cleanly? | Yes | P1 |
+| Do file paths and line numbers survive? | Yes — `src/app.py` at lines 19, 26, 32 | P1 |
+| Does `security-severity` survive into the alert? | Yes — `9.8` rendered as `critical` | P1 |
+| Do SARIF `suppressions` dismiss an alert? | **No.** Neither `external` nor `inSource`. Five uploaded, five open, zero dismissed. | P1 |
+
+The last row is why dismissals in P6 must go through
+`PATCH /code-scanning/alerts/{number}` rather than through the SARIF document. See
+`docs/ARCHITECTURE.md`.
+
 ## Secrets
 
 | Secret | Used by | Set? |
