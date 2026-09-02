@@ -291,7 +291,7 @@ Real scanner output sometimes fails that schema. When a fixture does:
 - **Never mutate the input to make it validate.** Rewriting a user's document to
   satisfy a validator is exactly the silent-modification failure this whole
   document is arguing against.
-- Record it in `tests/fixtures/SCHEMA_DEVIATIONS.md`: fixture path, tool and exact
+- Record it in `evals/fixtures/SCHEMA_DEVIATIONS.md`: fixture path, tool and exact
   version, JSON pointer to the offending node, and the validator's message.
 - The round-trip property test still applies. Losslessness is our contract;
   schema-validity is upstream's.

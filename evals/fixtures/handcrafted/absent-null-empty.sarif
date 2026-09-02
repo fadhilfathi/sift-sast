@@ -1,0 +1,105 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "handcrafted", "version": "0.0.0" } },
+      "results": [
+        {
+          "ruleId": "absent.optional.keys",
+          "message": { "text": "No level, no suppressions, no properties, no fingerprints. These keys must still be absent after a round trip, not materialized as defaults." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/absent.py" },
+                "region": { "startLine": 1 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "empty.containers",
+          "message": { "text": "Explicitly empty containers. Distinct from absent, and must not collapse into it." },
+          "suppressions": [],
+          "properties": {},
+          "fingerprints": {},
+          "partialFingerprints": {},
+          "codeFlows": [],
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/empty.py" },
+                "region": { "startLine": 2 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "explicit.nulls",
+          "message": { "text": "Explicit JSON null. Distinct from both absent and empty, and must survive as null." },
+          "level": null,
+          "properties": { "reviewer": null, "score": null, "nested": { "inner": null } },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/nulls.py" },
+                "region": { "startLine": 3, "endColumn": null }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "number.forms",
+          "message": { "text": "Integral float, negative zero, exponent form, and a high-precision decimal. Canonicalization normalizes integral floats to integers; the rest must survive intact." },
+          "properties": {
+            "integral_float": 8.0,
+            "plain_int": 8,
+            "negative_zero": -0.0,
+            "exponent": 1e3,
+            "precise": 0.1234567890123456789,
+            "big": 9007199254740993
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/numbers.py" },
+                "region": { "startLine": 4 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "already.suppressed.upstream",
+          "message": { "text": "Arrived already carrying a suppression. SIFT must neither drop the finding nor discard someone else's suppression." },
+          "suppressions": [
+            {
+              "kind": "inSource",
+              "status": "accepted",
+              "justification": "nosem comment in the source, written by a human before SIFT ran"
+            }
+          ],
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/suppressed.py" },
+                "region": { "startLine": 5 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "empty.strings",
+          "message": { "text": "" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/empty_message.py" },
+                "region": { "startLine": 6, "snippet": { "text": "" } }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

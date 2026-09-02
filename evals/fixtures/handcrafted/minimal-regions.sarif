@@ -1,0 +1,63 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "handcrafted", "version": "0.0.0" } },
+      "results": [
+        {
+          "ruleId": "no.region.at.all",
+          "message": { "text": "Location has an artifact but no region." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/no_region.py" } } }
+          ]
+        },
+        {
+          "ruleId": "start.line.only",
+          "message": { "text": "Region carries startLine and nothing else." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/start_line_only.py" },
+                "region": { "startLine": 42 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "start.line.and.column",
+          "message": { "text": "Region has no end bounds." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/partial.py" },
+                "region": { "startLine": 7, "startColumn": 12 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "no.locations.array",
+          "message": { "text": "A result with no locations at all. Legal, and it still must survive." }
+        },
+        {
+          "ruleId": "empty.locations.array",
+          "message": { "text": "An empty locations array is not the same as an absent one." },
+          "locations": []
+        },
+        {
+          "ruleId": "byte.offset.region",
+          "message": { "text": "Region addressed by byte offset rather than line." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/binaryish.dat" },
+                "region": { "byteOffset": 1024, "byteLength": 16 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "handcrafted", "version": "0.0.0" } },
+      "results": [
+        {
+          "ruleId": "path.non.ascii",
+          "message": { "text": "Accented and CJK path segments." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/café/naïve/日本語/módulo.py" },
+                "region": { "startLine": 3 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "path.escaped.vs.literal",
+          "message": { "text": "The same character written as a \\u escape rather than literally. Semantically identical to the entry above after decoding, and must compare equal." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/café/naïve/日本語/módulo.py" },
+                "region": { "startLine": 4 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "path.windows.separators",
+          "message": { "text": "Backslash-separated URI, as Semgrep emits when run on Windows." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src\\pkg\\module.py" },
+                "region": { "startLine": 9 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "path.percent.encoded",
+          "message": { "text": "Percent-encoded space and hash in the URI." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/my%20folder/issue%23123.py" },
+                "region": { "startLine": 1 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "path.absolute.file.uri",
+          "message": { "text": "Absolute file: URI rather than a repo-relative path." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "file:///home/runner/work/repo/src/abs.py" },
+                "region": { "startLine": 2 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "path.traversal.attempt",
+          "message": { "text": "A SARIF file is untrusted input. This path must never resolve outside the repo root; the context builder is required to refuse it." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "../../../../etc/passwd" },
+                "region": { "startLine": 1 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "message.with.control.characters",
+          "message": {
+            "text": "Tab\there, newline\nhere, quote \" here, backslash \\ here, and an emoji 🔥 outside the BMP.",
+            "markdown": "Tab\there and a [link](https://example.invalid/a?b=1&c=2)."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/messages.py" },
+                "region": {
+                  "startLine": 5,
+                  "snippet": { "text": "    q = \"SELECT * FROM t WHERE x = '\" + user + \"'\"  # ééé" }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

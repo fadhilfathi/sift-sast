@@ -1,0 +1,105 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "$comment": "An unknown top-level key. SIFT does not understand it and must return it unchanged.",
+  "version": "2.1.0",
+  "inlineExternalProperties": [
+    { "guid": "3f2504e0-4f89-11d3-9a0c-0305e82c3301", "runGuid": "84b1d5c1-1000-4000-8000-000000000001" }
+  ],
+  "x-vendor-top-level": { "written_by": "some other tool in the chain", "nested": { "deeply": [1, 2, { "three": true }] } },
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "handcrafted",
+          "version": "0.0.0",
+          "informationUri": "https://example.invalid/tool",
+          "x-driver-extension": "unknown key inside the driver",
+          "rules": [
+            {
+              "id": "vendor.rule.one",
+              "name": "VendorRuleOne",
+              "shortDescription": { "text": "Short." },
+              "fullDescription": { "text": "Long." },
+              "defaultConfiguration": { "level": "warning" },
+              "properties": {
+                "tags": ["security", "cwe-89"],
+                "precision": "high",
+                "security-severity": "8.8",
+                "x-vendor-rule-metadata": { "internal_id": 4711 }
+              },
+              "x-unknown-on-descriptor": null
+            }
+          ]
+        },
+        "extensions": [
+          {
+            "name": "handcrafted-extension",
+            "version": "1.2.3",
+            "guid": "1b6a5d4e-0000-4000-8000-00000000abcd",
+            "rules": [{ "id": "ext.rule.one", "shortDescription": { "text": "From an extension." } }]
+          }
+        ]
+      },
+      "automationDetails": { "id": "handcrafted/vendor/", "guid": "9c1e1a3d-0000-4000-8000-00000000beef" },
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://github.com/example/repo",
+          "revisionId": "0000000000000000000000000000000000000000",
+          "branch": "refs/heads/main"
+        }
+      ],
+      "originalUriBaseIds": { "SRCROOT": { "uri": "file:///src/" } },
+      "artifacts": [
+        { "location": { "uri": "src/a.py", "uriBaseId": "SRCROOT" }, "length": 120, "sourceLanguage": "python" }
+      ],
+      "properties": { "x-run-level": "vendor data on the run" },
+      "results": [
+        {
+          "ruleId": "vendor.rule.one",
+          "ruleIndex": 0,
+          "level": "error",
+          "kind": "fail",
+          "rank": 82.5,
+          "message": { "text": "Carries vendor properties at every depth." },
+          "locations": [
+            {
+              "id": 0,
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/a.py", "uriBaseId": "SRCROOT", "index": 0 },
+                "region": { "startLine": 5, "startColumn": 1, "endLine": 5, "endColumn": 20 },
+                "x-unknown-on-physical-location": ["a", "b"]
+              },
+              "logicalLocations": [
+                { "name": "handler", "kind": "function", "fullyQualifiedName": "src.a.handler" }
+              ],
+              "properties": { "x-location-level": true }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "e3b0c44298fc1c14:1",
+            "primaryLocationStartColumnFingerprint": "1",
+            "x-vendor-fingerprint": "do-not-touch"
+          },
+          "fingerprints": { "matchBasedId/v1": "9f86d081884c7d65" },
+          "properties": {
+            "x-result-level": { "reviewer": "nobody", "score": 0.5 },
+            "tags": ["vendor"]
+          },
+          "x-unknown-on-result": 12345
+        },
+        {
+          "ruleId": "ext.rule.one",
+          "message": { "text": "Reported by the extension, not the driver." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/a.py", "uriBaseId": "SRCROOT" },
+                "region": { "startLine": 9 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

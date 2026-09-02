@@ -1,0 +1,133 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "handcrafted", "version": "0.0.0" } },
+      "results": [
+        {
+          "ruleId": "no.codeflows",
+          "message": { "text": "A taint-shaped rule that reported no codeFlows." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/sink.py" },
+                "region": { "startLine": 10 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "empty.codeflows",
+          "message": { "text": "An empty codeFlows array, distinct from an absent one." },
+          "codeFlows": [],
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/sink.py" },
+                "region": { "startLine": 11 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "deep.multi.threadflow",
+          "message": { "text": "Two codeFlows, the second with two threadFlows and nesting levels." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "src/sink.py" },
+                "region": { "startLine": 88, "startColumn": 5, "endLine": 88, "endColumn": 40 }
+              }
+            }
+          ],
+          "codeFlows": [
+            {
+              "message": { "text": "first flow" },
+              "threadFlows": [
+                {
+                  "locations": [
+                    {
+                      "nestingLevel": 0,
+                      "location": {
+                        "message": { "text": "source" },
+                        "physicalLocation": {
+                          "artifactLocation": { "uri": "src/handler.py" },
+                          "region": { "startLine": 4 }
+                        }
+                      }
+                    },
+                    {
+                      "nestingLevel": 1,
+                      "location": {
+                        "message": { "text": "sink" },
+                        "physicalLocation": {
+                          "artifactLocation": { "uri": "src/sink.py" },
+                          "region": { "startLine": 88 }
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "message": { "text": "second flow, interprocedural" },
+              "threadFlows": [
+                {
+                  "id": "thread-a",
+                  "locations": [
+                    {
+                      "nestingLevel": 0,
+                      "executionOrder": 1,
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": { "uri": "src/handler.py" },
+                          "region": { "startLine": 4 }
+                        }
+                      }
+                    },
+                    {
+                      "nestingLevel": 2,
+                      "executionOrder": 2,
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": { "uri": "src/middleware/auth.py" },
+                          "region": { "startLine": 31 }
+                        }
+                      }
+                    },
+                    {
+                      "nestingLevel": 3,
+                      "executionOrder": 3,
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": { "uri": "src/db/query.py" },
+                          "region": { "startLine": 12 }
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "thread-b",
+                  "locations": [
+                    {
+                      "nestingLevel": 0,
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": { "uri": "src/worker.py" },
+                          "region": { "startLine": 60 }
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

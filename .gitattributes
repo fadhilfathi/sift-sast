@@ -6,6 +6,9 @@ Makefile text eol=lf
 *.yml      text eol=lf
 *.yaml     text eol=lf
 
-# SARIF fixtures are byte-compared in round-trip tests. Do not touch them.
-tests/fixtures/**/*.sarif -text
-evals/dataset/**          -text
+# SARIF fixtures are compared as parsed documents in round-trip tests, and their
+# bytes are recorded in MANIFEST.json. Git must not rewrite their line endings.
+evals/fixtures/**/*.sarif -text
+evals/fixtures/MANIFEST.json -text
+evals/dataset/** -text
+evals/fixtures/generate.sh text eol=lf

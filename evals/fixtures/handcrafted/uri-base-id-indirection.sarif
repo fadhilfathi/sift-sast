@@ -1,0 +1,69 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "handcrafted", "version": "0.0.0" } },
+      "originalUriBaseIds": {
+        "SRCROOT": { "uri": "file:///src/" },
+        "REPO": { "uri": "repo/", "uriBaseId": "SRCROOT" },
+        "MODULE": { "uri": "backend/", "uriBaseId": "REPO" }
+      },
+      "artifacts": [
+        { "location": { "uri": "app/main.py", "uriBaseId": "MODULE" }, "sourceLanguage": "python" },
+        { "location": { "uri": "app/util.py", "uriBaseId": "REPO" }, "sourceLanguage": "python" },
+        { "location": { "uri": "standalone.py" }, "sourceLanguage": "python" }
+      ],
+      "results": [
+        {
+          "ruleId": "three.level.base.chain",
+          "message": { "text": "Resolves through MODULE -> REPO -> SRCROOT, so the real path is src/repo/backend/app/main.py." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "app/main.py", "uriBaseId": "MODULE", "index": 0 },
+                "region": { "startLine": 14 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "artifact.index.only",
+          "message": { "text": "artifactLocation carries only an index into run.artifacts, with no uri of its own." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "index": 1 },
+                "region": { "startLine": 2 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "no.base.id",
+          "message": { "text": "Plain relative uri with no uriBaseId, in the same run as the chained ones." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "standalone.py", "index": 2 },
+                "region": { "startLine": 1 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "unknown.base.id",
+          "message": { "text": "References a uriBaseId that run.originalUriBaseIds never defines. Resolution must fail loudly rather than silently guessing a path." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "ghost.py", "uriBaseId": "NOT_DEFINED_ANYWHERE" },
+                "region": { "startLine": 1 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
