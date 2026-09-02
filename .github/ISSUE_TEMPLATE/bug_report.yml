@@ -1,0 +1,38 @@
+name: Bug report
+description: Something broke that is not a wrong verdict
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the exact command and the exact error.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SIFT version
+      placeholder: "output of: sift version"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Python version and OS
+      placeholder: "3.12.14, Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: scanner
+    attributes:
+      label: Which scanner produced the SARIF
+      placeholder: "Semgrep 1.x / CodeQL 2.x"

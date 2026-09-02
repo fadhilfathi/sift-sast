@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a capability
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you unable to do today? Describe the situation, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Effect on false suppression
+      description: >
+        Could this make SIFT dismiss more findings? If so, say how you would
+        measure that it does not dismiss real ones. "No verdict impact" is a
+        valid answer.
+    validations:
+      required: true
