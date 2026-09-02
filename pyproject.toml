@@ -36,6 +36,7 @@ dev = [
   "pytest-asyncio>=0.24",
   "hypothesis>=6.115",
   "jsonschema>=4.23",
+  "types-jsonschema>=4.23",
   "ruff>=0.8",
   "mypy>=1.13",
   "pre-commit>=4.0",
