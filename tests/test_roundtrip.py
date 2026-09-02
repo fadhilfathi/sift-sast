@@ -14,10 +14,26 @@ from typing import Any
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from pydantic import BaseModel
 
 from sift.canonical import canonical, canonical_equal, diff
 from sift.emit.sarif import ResultCountError, check_lossless, to_document
 from sift.ingest import SarifParseError, loads, parse
+from sift.models.sarif import Result, Run
+
+
+def _field_names(model: type[BaseModel]) -> set[str]:
+    """Alias and Python spelling for every field a model declares.
+
+    Derived from the model so the "unknown keys" strategies below cannot drift
+    into generating a *typed* field with an arbitrary value.
+    """
+    fields = model.model_fields
+    return set(fields) | {f.alias for f in fields.values() if f.alias}
+
+
+RESULT_FIELD_NAMES = _field_names(Result)
+RUN_FIELD_NAMES = _field_names(Run)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "evals" / "fixtures"
 HANDCRAFTED = sorted((FIXTURES / "handcrafted").glob("*.sarif"))
@@ -218,9 +234,15 @@ def sarif_results(draw: st.DrawFn) -> dict[str, Any]:
     if draw(st.booleans()):
         result["partialFingerprints"] = {"primaryLocationLineHash": draw(st.text(max_size=20))}
     # Unknown keys, which must survive untouched.
+    #
+    # Excludes every name the model knows, derived from the model rather than
+    # hand-listed so the two cannot drift. Hypothesis twice generated a typed
+    # field with an arbitrary value this way — `runs: None`, then
+    # `codeFlows: None` — and both are schema-invalid input that ingest refuses
+    # by design. Refusal is covered by test_null_for_an_array_field_is_refused.
     for key, value in draw(
         st.dictionaries(
-            st.text(min_size=1, max_size=10).filter(lambda s: s not in {"message", "ruleId"}),
+            st.text(min_size=1, max_size=10).filter(lambda s: s not in RESULT_FIELD_NAMES),
             json_values,
             max_size=3,
         )
@@ -234,14 +256,21 @@ def sarif_logs(draw: st.DrawFn) -> dict[str, Any]:
     runs = draw(
         st.lists(
             st.builds(
+                # Extras first, then the typed keys, so an arbitrary key named
+                # "results" cannot clobber the results array. Hypothesis found
+                # that too, after the same bug at the log level.
                 lambda name, results, extra: {
+                    **extra,
                     "tool": {"driver": {"name": name}},
                     "results": results,
-                    **extra,
                 },
                 st.text(min_size=1, max_size=20),
                 st.lists(sarif_results(), max_size=4),
-                st.dictionaries(st.text(min_size=1, max_size=10), json_values, max_size=2),
+                st.dictionaries(
+                    st.text(min_size=1, max_size=10).filter(lambda s: s not in RUN_FIELD_NAMES),
+                    json_values,
+                    max_size=2,
+                ),
             ),
             min_size=0,
             max_size=3,
@@ -309,6 +338,36 @@ def test_malformed_input_is_refused(document: dict[str, Any], reason: str) -> No
     """
     with pytest.raises(SarifParseError):
         parse(document)
+
+
+@pytest.mark.parametrize(
+    "field", ["codeFlows", "locations", "suppressions"], ids=lambda f: f"null-{f}"
+)
+def test_null_for_an_array_field_is_refused(field: str) -> None:
+    """`null` where SARIF requires an array is refused, not coerced.
+
+    Hypothesis found this. Both alternatives are worse: coercing null to []
+    would destroy the absent/null/empty distinction D2 exists to preserve, and
+    making every list field optional pushes a None check into every consumer for
+    a shape no real scanner in the corpus emits.
+
+    The cost is real and worth stating plainly. One malformed result rejects the
+    whole file, so every finding in it goes untriaged. That failure is loud —
+    exit 1 naming the offending field — rather than a silent zero-finding run,
+    which is the direction that actually gets someone breached.
+    """
+    document = {
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {"driver": {"name": "t"}},
+                "results": [{"ruleId": "r", "message": {"text": "m"}, field: None}],
+            }
+        ],
+    }
+    with pytest.raises(SarifParseError) as caught:
+        parse(document)
+    assert field in str(caught.value)
 
 
 @pytest.mark.parametrize(
