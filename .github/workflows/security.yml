@@ -18,6 +18,10 @@ concurrency:
 jobs:
   codeql:
     name: CodeQL
+    # Code scanning upload requires GitHub Advanced Security, which a private
+    # repository without a GHAS licence does not have. The job enables itself
+    # automatically when the repo goes public — no edit required.
+    if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -35,7 +39,8 @@ jobs:
 
   dependency-review:
     name: Dependency review
-    if: github.event_name == 'pull_request'
+    # Also GHAS-gated on private repositories. Dependabot alerts still run.
+    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -56,6 +61,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The upstream action scans only the pushed commit range, which breaks on
+      # a root commit (`<sha>^` does not resolve) and would miss a secret that
+      # was committed and then removed in a later push. Running the pinned image
+      # directly scans the whole history every time, and needs no licence key.
+      - name: Scan full history for secrets
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            ghcr.io/gitleaks/gitleaks@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055 \
+            git --redact --no-banner --verbose --exit-code 1 .
