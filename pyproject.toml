@@ -1,0 +1,98 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sift-sast"
+version = "0.0.0"
+description = "Triage SARIF findings with AST-grounded context and multi-agent LLM adjudication."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "fadhilfathi" }]
+keywords = ["sarif", "sast", "security", "static-analysis", "triage", "devsecops"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Topic :: Security",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = [
+  "pydantic>=2.9",
+  "typer>=0.15",
+  "anthropic>=0.40",
+  "tree-sitter>=0.23",
+  "tree-sitter-python>=0.23",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "pytest-asyncio>=0.24",
+  "hypothesis>=6.115",
+  "jsonschema>=4.23",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "pre-commit>=4.0",
+]
+
+[project.scripts]
+sift = "sift.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/fadhilfathi/sift"
+Repository = "https://github.com/fadhilfathi/sift"
+Issues = "https://github.com/fadhilfathi/sift/issues"
+Changelog = "https://github.com/fadhilfathi/sift/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sift"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+# Docs carry aligned Python snippets for readability; ruff would reflow them.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "PTH", "RUF", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B011"]
+"evals/**" = ["S"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests", "evals"]
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+disallow_any_explicit = false
+
+[[tool.mypy.overrides]]
+module = ["tree_sitter_python.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+asyncio_mode = "auto"
+markers = [
+  "llm: test that makes a real LLM call (deselected by default)",
+]
+
+[tool.coverage.run]
+source = ["src/sift"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

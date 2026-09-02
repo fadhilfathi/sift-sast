@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+# Never let a Windows checkout hand CRLF to a Linux runner.
+Makefile text eol=lf
+*.sh       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+
+# SARIF fixtures are byte-compared in round-trip tests. Do not touch them.
+tests/fixtures/**/*.sarif -text
+evals/dataset/**          -text

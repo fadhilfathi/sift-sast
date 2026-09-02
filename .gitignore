@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# SIFT runtime artifacts. Cache and raw eval outputs embed analyzed source code.
+.sift-cache/
+evals/runs/
+!evals/runs/.gitkeep
+
+# OneDrive / OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
