@@ -1,0 +1,69 @@
+name: SIFT SAST triage
+description: Triage SARIF findings with AST-grounded context and multi-agent adjudication.
+author: fadhilfathi
+
+branding:
+  icon: filter
+  color: purple
+
+inputs:
+  sarif:
+    description: Path to the input SARIF 2.1.0 file.
+    required: true
+  output:
+    description: Path for the annotated SARIF output.
+    required: false
+    default: sift.sarif
+  repo-root:
+    description: Root of the repository being analyzed.
+    required: false
+    default: .
+  anthropic-api-key:
+    description: API key for the LLM provider. Required unless dry-run is true.
+    required: false
+  budget-usd:
+    description: Hard spend ceiling for the run, checked before each call.
+    required: false
+    default: "5.00"
+  dry-run:
+    description: Estimate cost and call count without spending anything.
+    required: false
+    default: "false"
+  comment-on-pr:
+    description: Post a Markdown summary as a pull request comment.
+    required: false
+    default: "true"
+
+outputs:
+  sarif:
+    description: Path to the annotated SARIF file.
+    value: ${{ steps.triage.outputs.sarif }}
+  true-positives:
+    description: Count of findings adjudicated TRUE_POSITIVE.
+    value: ${{ steps.triage.outputs.true-positives }}
+  needs-review:
+    description: Count of findings escalated to NEEDS_HUMAN_REVIEW.
+    value: ${{ steps.triage.outputs.needs-review }}
+  cost-usd:
+    description: Total spend for the run.
+    value: ${{ steps.triage.outputs.cost-usd }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        python-version: "3.12"
+
+    - name: Triage
+      id: triage
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        SIFT_BUDGET_USD: ${{ inputs.budget-usd }}
+      run: |
+        uvx --from sift-sast sift triage "${{ inputs.sarif }}" \
+          --repo "${{ inputs.repo-root }}" \
+          --out "${{ inputs.output }}" \
+          ${{ inputs.dry-run == 'true' && '--dry-run' || '' }}

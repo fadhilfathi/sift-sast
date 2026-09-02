@@ -1,0 +1,62 @@
+name: Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Estimate cost and call count without spending anything"
+        type: boolean
+        default: true
+  schedule:
+    # Weekly, Monday 05:00 UTC.
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    name: Eval suite
+    runs-on: ubuntu-24.04
+    # Guards a real spend. The $5/run abort inside sift is the primary control;
+    # this is the backstop if the pipeline hangs.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - run: uv sync --extra dev
+
+      - name: Restore verdict cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .sift-cache
+          key: sift-cache-${{ github.sha }}
+          restore-keys: sift-cache-
+
+      - name: Estimate cost
+        run: uv run sift eval --dry-run
+
+      - name: Run eval
+        if: github.event_name == 'schedule' || inputs.dry_run == false
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: uv run sift eval --report evals/REPORT.md
+
+      - name: Upload metrics report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eval-report
+          path: |
+            evals/REPORT.md
+            evals/runs/
+          if-no-files-found: ignore
