@@ -1,0 +1,158 @@
+{
+  "note": "Written by generate.sh. Do not edit by hand.",
+  "generator": "03196cb43bf0826e22d3d0fc68f99ca6b35e3752",
+  "semgrep": {
+    "version": "1.176.0",
+    "rulesets": {
+      "p/security-audit": "sha256:b109a039df712f30c6d3e25e1e8358053fd0f1c91b92d0e8d2871cd141fe602f",
+      "p/default": "sha256:f5fdef33ff40302dc9d54fae9ec7f60feb0fdb70978756c3975cc8e17ae96a2d"
+    }
+  },
+  "codeql": {
+    "version": "v2.26.4"
+  },
+  "targets": [
+    {
+      "repo": "pallets/flask",
+      "sha": "d318b683471101618febed18996405ad26462110",
+      "language": "python"
+    },
+    {
+      "repo": "expressjs/express",
+      "sha": "023767fe9872e029271df1418f73401bff20ff40",
+      "language": "javascript"
+    },
+    {
+      "repo": "google/gson",
+      "sha": "b3f4ca20087f9066de4c340522ff84e0558e1ad1",
+      "language": "java"
+    },
+    {
+      "repo": "gorilla/mux",
+      "sha": "db9d1d0073d27a0a2d9a8c1bc52aa0af4374d265",
+      "language": "go"
+    }
+  ],
+  "fixtures": {
+    "generated/codeql-expressjs-express-code-scanning.sarif": {
+      "sha256": "sha256:f5b3a51cc0afd895bb35d712ceb3e929fb054bdd4466164cfd7230a66fc7a093",
+      "bytes": 392909,
+      "runs": 1,
+      "results": 5
+    },
+    "generated/codeql-expressjs-express-security-extended.sarif": {
+      "sha256": "sha256:4413d94797710fed69afdd3630447b80916fd963877969a8cfa58b0e49cf1586",
+      "bytes": 411996,
+      "runs": 1,
+      "results": 5
+    },
+    "generated/codeql-pallets-flask-code-scanning.sarif": {
+      "sha256": "sha256:c60c4aef6fe776c474fede2fa5e6b5f7a057ff10aa8ee62018ba8ce7bbcac1bb",
+      "bytes": 243199,
+      "runs": 1,
+      "results": 8
+    },
+    "generated/codeql-pallets-flask-security-extended.sarif": {
+      "sha256": "sha256:801b72de325c5168f1e922e26b12b4a7d240a549bfeb43c3c3339064c12a6359",
+      "bytes": 251548,
+      "runs": 1,
+      "results": 8
+    },
+    "generated/semgrep-expressjs-express-p-default.sarif": {
+      "sha256": "sha256:f8a98bc6036a5620b10f11fd79d15ef40bedda536d259b7cb1ef480182df09df",
+      "bytes": 2670498,
+      "runs": 1,
+      "results": 45
+    },
+    "generated/semgrep-expressjs-express-p-security-audit.sarif": {
+      "sha256": "sha256:93dda566ce039e9cb5dceac73a865cf02c7bd897f4283e9a5466bfacba99a552",
+      "bytes": 550235,
+      "runs": 1,
+      "results": 0
+    },
+    "generated/semgrep-google-gson-p-default.sarif": {
+      "sha256": "sha256:a9e5821f65f8470e4f2b78b6f92986e09b7ef5b53d59f10b30752e960559c986",
+      "bytes": 2618878,
+      "runs": 1,
+      "results": 2
+    },
+    "generated/semgrep-google-gson-p-security-audit.sarif": {
+      "sha256": "sha256:93dda566ce039e9cb5dceac73a865cf02c7bd897f4283e9a5466bfacba99a552",
+      "bytes": 550235,
+      "runs": 1,
+      "results": 0
+    },
+    "generated/semgrep-gorilla-mux-p-default.sarif": {
+      "sha256": "sha256:cf8588b10a1b91cfc424d76ab3576c31bc502357e82a0e412393ed6b4d28f3fc",
+      "bytes": 2630100,
+      "runs": 1,
+      "results": 11
+    },
+    "generated/semgrep-gorilla-mux-p-security-audit.sarif": {
+      "sha256": "sha256:93dda566ce039e9cb5dceac73a865cf02c7bd897f4283e9a5466bfacba99a552",
+      "bytes": 550235,
+      "runs": 1,
+      "results": 0
+    },
+    "generated/semgrep-pallets-flask-p-default.sarif": {
+      "sha256": "sha256:5ccdeb9d3f88822c22677b2e7983e7548374c621a01413a695d19749e84e4b00",
+      "bytes": 2637682,
+      "runs": 1,
+      "results": 16
+    },
+    "generated/semgrep-pallets-flask-p-security-audit.sarif": {
+      "sha256": "sha256:537be007529e86f4761cbb981a82dfd298e2d501a1c36f3102320c4259411ab0",
+      "bytes": 553541,
+      "runs": 1,
+      "results": 3
+    },
+    "handcrafted/absent-null-empty.sarif": {
+      "sha256": "sha256:acc53d9d7eceaca770543928bcb53b72879f2330c27bf2f540ac16f57bd0dd24",
+      "bytes": 3608,
+      "runs": 1,
+      "results": 6
+    },
+    "handcrafted/codeflows.sarif": {
+      "sha256": "sha256:0689f9fa0047752d8f2e356461d197b731c1b34886f0e6dda4edd871fa2d8cda",
+      "bytes": 4469,
+      "runs": 1,
+      "results": 3
+    },
+    "handcrafted/empty-results.sarif": {
+      "sha256": "sha256:a8e2d5b171fe9a4eeffd289b31733f229d56fc540a8fbfe44072e5adcd3040c4",
+      "bytes": 879,
+      "runs": 3,
+      "results": 1
+    },
+    "handcrafted/minimal-regions.sarif": {
+      "sha256": "sha256:577248fc86bce0e6d1f09d963fa69679367a09b247e487fde2b03e700e26aec6",
+      "bytes": 2040,
+      "runs": 1,
+      "results": 6
+    },
+    "handcrafted/multiple-runs.sarif": {
+      "sha256": "sha256:383133b7937a1d8ca304cd38883578a69ea480548507f975082d997cfb2735fa",
+      "bytes": 1929,
+      "runs": 3,
+      "results": 3
+    },
+    "handcrafted/unicode-and-odd-paths.sarif": {
+      "sha256": "sha256:53f1e908ec9ab2c7c93534d37eba8eaae975c00102740b35541a737a048bc219",
+      "bytes": 3501,
+      "runs": 1,
+      "results": 7
+    },
+    "handcrafted/uri-base-id-indirection.sarif": {
+      "sha256": "sha256:21fd474178da5ee75b42a2929238b0db72c78341a727be8a35bba936e4ec0bb6",
+      "bytes": 2531,
+      "runs": 1,
+      "results": 4
+    },
+    "handcrafted/vendor-extensions.sarif": {
+      "sha256": "sha256:6aab560332fc3d6144ed68def061beb5efb2b3755566e7498fe1a22e0822bc5e",
+      "bytes": 4014,
+      "runs": 1,
+      "results": 2
+    }
+  }
+}
