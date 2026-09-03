@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
+from collections import defaultdict
 from enum import StrEnum
 from urllib.parse import unquote
 
@@ -138,6 +139,28 @@ def _digest(*parts: str) -> str:
     return hashlib.sha256(joined).hexdigest()[:32]
 
 
+def degenerate_fingerprints(run: Run) -> frozenset[str]:
+    """Fingerprint values that carry no information within this run.
+
+    A fingerprint earns trust by discriminating. If one value is attached to two
+    results at different rules or locations, it is a placeholder, not an
+    identity, and keying on it would merge findings that are not the same.
+
+    This is not hypothetical. Semgrep emits the literal string "requires login"
+    as ``matchBasedId/v1`` when it is not authenticated, and every result in the
+    file carries it.
+    """
+    seen: defaultdict[str, set[tuple[str | None, str | None, int | None]]] = defaultdict(set)
+    for result in run.results:
+        uri, line, _ = _primary_location(result)
+        where = (result.rule_id, uri, line)
+        for value in result.partial_fingerprints.values():
+            seen[value].add(where)
+        for value in result.fingerprints.values():
+            seen[value].add(where)
+    return frozenset(value for value, places in seen.items() if len(places) > 1)
+
+
 def correlate(
     result: Result,
     *,
@@ -145,6 +168,7 @@ def correlate(
     run_index: int,
     result_index: int,
     source_line: str | None = None,
+    degenerate: frozenset[str] = frozenset(),
 ) -> FindingRef:
     """Derive the correlation ID for one result.
 
@@ -152,15 +176,38 @@ def correlate(
     read the repository, so it is normally ``None`` here and the snippet the
     scanner embedded is used instead. The context builder supplies the real line
     in P3, which upgrades a positional identity to a content one.
+
+    ``degenerate`` names fingerprint values that carry no information within
+    their run, as computed by :func:`degenerate_fingerprints`. Those tiers are
+    skipped so a placeholder cannot merge distinct findings.
     """
     scope = _tool_scope(run)
     uri, start_line, start_column = _primary_location(result)
     rule_id = result.rule_id
 
+    path = normalize_path(uri) if uri else ""
+    column = str(start_column) if start_column is not None else ""
+    line_text = source_line if source_line is not None else _snippet_text(result)
+
+    # Every tier is bound to the finding's own rule and location. An upstream
+    # fingerprint supplies *stability*; it must never be the only thing supplying
+    # *distinctness*.
+    #
+    # Measured: Semgrep emits the literal placeholder "requires login" as
+    # matchBasedId/v1 when it is not authenticated. Keying on that value alone
+    # collapsed 45 findings across 20 files and several rules into one
+    # correlation ID, so 44 real findings were dismissed as duplicates of each
+    # other. Rule and path are cheap and make a degenerate upstream hash
+    # harmless. None of this weakens the stability matrix: inserting a line
+    # above a finding changes neither its rule, its path, nor its start column.
+    located = (rule_id or "", path, column)
+
     upstream = result.partial_fingerprints.get("primaryLocationLineHash")
+    if upstream and upstream in degenerate:
+        upstream = None
     if upstream:
         return FindingRef(
-            correlation_id=_digest(CORRELATION_VERSION, scope, upstream),
+            correlation_id=_digest(CORRELATION_VERSION, scope, *located, upstream),
             identity_source=IdentitySource.PRIMARY_LOCATION_LINE_HASH,
             run_index=run_index,
             result_index=result_index,
@@ -169,12 +216,13 @@ def correlate(
             start_line=start_line,
         )
 
-    if result.fingerprints:
+    usable = sorted((k, v) for k, v in result.fingerprints.items() if v not in degenerate)
+    if usable:
         # Deterministic pick: sorted by key, so adding an unrelated fingerprint
         # later cannot silently change which one we keyed on.
-        key, value = sorted(result.fingerprints.items())[0]
+        key, value = usable[0]
         return FindingRef(
-            correlation_id=_digest(CORRELATION_VERSION, scope, key, value),
+            correlation_id=_digest(CORRELATION_VERSION, scope, *located, key, value),
             identity_source=IdentitySource.TOOL_FINGERPRINT,
             run_index=run_index,
             result_index=result_index,
@@ -182,10 +230,6 @@ def correlate(
             uri=uri,
             start_line=start_line,
         )
-
-    path = normalize_path(uri) if uri else ""
-    column = str(start_column) if start_column is not None else ""
-    line_text = source_line if source_line is not None else _snippet_text(result)
 
     if line_text is not None:
         # Content-based: survives insertions above the finding.

@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from sift.ingest.fingerprint import FindingRef, correlate
+from sift.ingest.fingerprint import FindingRef, correlate, degenerate_fingerprints
 from sift.models.sarif import SarifLog
 
 __all__ = ["FindingRef", "SarifParseError", "load", "loads", "parse", "results_of"]
@@ -84,8 +84,51 @@ def results_of(log: SarifLog) -> list[FindingRef]:
     the run that produced it — two runs may report the same rule at the same
     line and those are two findings, not one.
     """
-    return [
-        correlate(result, run=run, run_index=run_index, result_index=result_index)
-        for run_index, run in enumerate(log.runs)
-        for result_index, result in enumerate(run.results)
-    ]
+    refs: list[FindingRef] = []
+    for run_index, run in enumerate(log.runs):
+        # Computed per run: a fingerprint's discriminating power is a property of
+        # the run it appears in, not of the value itself.
+        degenerate = degenerate_fingerprints(run)
+        refs.extend(
+            correlate(
+                result,
+                run=run,
+                run_index=run_index,
+                result_index=result_index,
+                degenerate=degenerate,
+            )
+            for result_index, result in enumerate(run.results)
+        )
+    return _disambiguate(refs)
+
+
+def _disambiguate(refs: list[FindingRef]) -> list[FindingRef]:
+    """Separate distinct findings that happen to share a correlation ID.
+
+    Content-based identity deliberately excludes the line number, so it survives
+    an insertion above the finding. The cost is that the same rule firing on two
+    byte-identical lines in one file — `subprocess.run(cmd, shell=True)` twice —
+    produces one ID for two real code sites, and the pre-filter would dismiss the
+    second as a duplicate.
+
+    Colliding refs at *different* lines get an occurrence ordinal, assigned in
+    line order so it does not move when unrelated lines shift. Colliding refs at
+    the *same* line are left alone: those are genuinely the same finding reported
+    twice, which is what deduplication is for.
+    """
+    grouped: dict[str, list[int]] = {}
+    for index, ref in enumerate(refs):
+        grouped.setdefault(ref.correlation_id, []).append(index)
+
+    out = list(refs)
+    for correlation_id, indexes in grouped.items():
+        lines = {refs[i].start_line for i in indexes}
+        if len(lines) < 2:
+            continue
+        ordinals = {line: n for n, line in enumerate(sorted(lines, key=lambda v: (v is None, v)))}
+        for i in indexes:
+            ordinal = ordinals[refs[i].start_line]
+            if ordinal == 0:
+                continue  # first occurrence keeps the bare ID
+            out[i] = refs[i].model_copy(update={"correlation_id": f"{correlation_id}:{ordinal}"})
+    return out

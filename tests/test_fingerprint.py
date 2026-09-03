@@ -11,8 +11,14 @@ from typing import Any
 import pytest
 
 from sift.ingest import loads, results_of
-from sift.ingest.fingerprint import IdentitySource, correlate, normalize_line, normalize_path
-from sift.models.sarif import Result, Run
+from sift.ingest.fingerprint import (
+    IdentitySource,
+    correlate,
+    degenerate_fingerprints,
+    normalize_line,
+    normalize_path,
+)
+from sift.models.sarif import Result, Run, SarifLog
 
 FLAGGED = "    subprocess.check_output(cmd, shell=True)"
 
@@ -256,3 +262,107 @@ def test_corpus_ids_are_reproducible() -> None:
         first = [r.correlation_id for r in results_of(log)]
         second = [r.correlation_id for r in results_of(log)]
         assert first == second, path.name
+
+
+# ------------------------------------------- degenerate upstream fingerprints
+
+
+def _run_with(results: list[Result]) -> Run:
+    run = make_run()
+    run.results.extend(results)
+    return run
+
+
+def test_placeholder_fingerprint_does_not_merge_findings() -> None:
+    """The bug this guards against dismissed 44 of 45 real findings.
+
+    Semgrep emits the literal string "requires login" as matchBasedId/v1 when it
+    is not authenticated, so every result in the file carries the same value.
+    Keyed on that alone, 45 findings across 20 files and several rules collapsed
+    into one correlation ID and the pre-filter dismissed 44 as duplicates.
+    """
+    placeholder = {"matchBasedId/v1": "requires login"}
+    results = [
+        make_result(rule="rule.a", uri="src/a.py", line=1, fingerprints=placeholder),
+        make_result(rule="rule.b", uri="src/b.py", line=2, fingerprints=placeholder),
+        make_result(rule="rule.a", uri="src/a.py", line=99, fingerprints=placeholder),
+    ]
+    run = _run_with(results)
+    assert "requires login" in degenerate_fingerprints(run)
+
+    log = SarifLog(version="2.1.0", runs=[run])
+    assert len({r.correlation_id for r in results_of(log)}) == 3
+
+
+def test_a_placeholder_falls_back_rather_than_being_trusted() -> None:
+    placeholder = {"matchBasedId/v1": "requires login"}
+    results = [
+        make_result(uri="src/a.py", fingerprints=placeholder),
+        make_result(uri="src/b.py", fingerprints=placeholder),
+    ]
+    run = _run_with(results)
+    ref = correlate(
+        results[0],
+        run=run,
+        run_index=0,
+        result_index=0,
+        degenerate=degenerate_fingerprints(run),
+    )
+    assert ref.identity_source is IdentitySource.CONTENT
+
+
+def test_a_discriminating_fingerprint_is_still_trusted() -> None:
+    results = [
+        make_result(uri="src/a.py", fingerprints={"matchBasedId/v1": "aaa"}),
+        make_result(uri="src/b.py", fingerprints={"matchBasedId/v1": "bbb"}),
+    ]
+    run = _run_with(results)
+    degenerate = degenerate_fingerprints(run)
+    assert degenerate == frozenset()
+    ref = correlate(results[0], run=run, run_index=0, result_index=0, degenerate=degenerate)
+    assert ref.identity_source is IdentitySource.TOOL_FINGERPRINT
+
+
+def test_a_degenerate_line_hash_is_also_rejected() -> None:
+    """Not only a Semgrep problem. CodeQL output in the corpus has these too."""
+    results = [
+        make_result(rule="r.a", uri="src/a.py", partial={"primaryLocationLineHash": "same:1"}),
+        make_result(rule="r.b", uri="src/b.py", partial={"primaryLocationLineHash": "same:1"}),
+    ]
+    run = _run_with(results)
+    degenerate = degenerate_fingerprints(run)
+    assert "same:1" in degenerate
+    ref = correlate(results[0], run=run, run_index=0, result_index=0, degenerate=degenerate)
+    assert ref.identity_source is not IdentitySource.PRIMARY_LOCATION_LINE_HASH
+
+
+def test_repeated_fingerprint_at_one_location_is_not_degenerate() -> None:
+    """The same finding reported twice is a duplicate, not a placeholder.
+
+    Only a value spanning *different* rules or locations loses trust.
+    """
+    same = make_result(uri="src/a.py", line=5, fingerprints={"matchBasedId/v1": "x"})
+    run = _run_with([same, same])
+    assert degenerate_fingerprints(run) == frozenset()
+
+
+def test_identity_is_bound_to_rule_and_path_at_every_tier() -> None:
+    """An upstream hash supplies stability; it never supplies distinctness alone."""
+    partial = {"primaryLocationLineHash": "h:1"}
+    a = make_result(rule="rule.a", uri="src/a.py", partial=partial)
+    b = make_result(rule="rule.b", uri="src/a.py", partial=partial)
+    c = make_result(rule="rule.a", uri="src/b.py", partial=partial)
+    assert len({cid(a), cid(b), cid(c)}) == 3
+
+
+def test_corpus_has_no_false_merges() -> None:
+    """103 real findings, 103 distinct IDs. The end-to-end version of the above."""
+    from tests.test_roundtrip import GENERATED
+
+    for path in GENERATED:
+        log, _ = loads(path.read_bytes(), source=str(path))
+        refs = results_of(log)
+        ids = {r.correlation_id for r in refs}
+        assert len(ids) == len(refs), (
+            f"{path.name}: {len(refs)} findings collapsed into {len(ids)} correlation IDs"
+        )
