@@ -1,0 +1,17 @@
+title = "sift gitleaks config"
+
+# Keep every upstream rule; only add an allowlist on top of it.
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+Deliberately fake, secret-shaped literals used to test sift.context.redact
+(decision D8) and the classifier. These exist so redaction has something real
+to redact; they are never live credentials. Scoped to exact files, not a
+blanket exclusion, so a genuine secret added to any other file still fires.
+"""
+paths = [
+  '''^tests/test_redact\.py$''',
+  '''^tests/fixtures/python_project/src/app\.py$''',
+]
