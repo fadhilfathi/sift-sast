@@ -145,6 +145,21 @@ def test_the_second_allowlisted_path_also_suppresses_it(
     assert leaks == []
 
 
+def test_the_third_allowlisted_path_also_suppresses_it(
+    gitleaks_binary: Path, tmp_path: Path
+) -> None:
+    """This test file's own FAKE_SECRET constant is real evidence, not a stand-in:
+
+    it tripped gitleaks on first push exactly like the other two, and needed
+    the same allowlist entry rather than being rewritten to avoid the shape.
+    """
+    repo = _make_repo(
+        tmp_path, {"tests/test_gitleaks_allowlist.py": f'FAKE_SECRET = "{FAKE_SECRET}"\n'}
+    )
+    leaks = _run_gitleaks(gitleaks_binary, repo)
+    assert leaks == []
+
+
 def test_the_identical_secret_elsewhere_still_fires(gitleaks_binary: Path, tmp_path: Path) -> None:
     """The regression this test exists to catch: an allowlist widened too far.
 
