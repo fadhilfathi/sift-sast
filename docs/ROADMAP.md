@@ -121,21 +121,54 @@ Zero LLM calls. Nothing tagged.
 
 ---
 
-## ☐ P3 — Context Builder, Python only
+## ☑ P3 — Context Builder, Python only
 
 **Acceptance criteria**
 
-- [ ] tree-sitter queries for Python: function bounds, callers, callees, imports
-- [ ] Fixture test per query
-- [ ] Populates every `ContextBundle` field, or records a `build_warning`
-- [ ] Path reads are traversal-safe and scoped to the repo root, with a test that
-      a `../../etc/passwd` style path is refused
-- [ ] Secrets redacted from every span before the bundle leaves the builder
-- [ ] `sift context dump <sarif>` writes `ContextBundle` JSON **for human review
-      before any model sees it**
-- [ ] Reviewed and approved by the maintainer
+- [x] tree-sitter queries for Python: function bounds, callers, callees, imports
+- [x] Fixture test per query
+- [x] Populates every `ContextBundle` field, or records a structured
+      `CompletenessReason` (D6) — stronger than the original `build_warning`
+      plan, since a warning nobody is forced to read is not a safety mechanism
+- [x] Path reads are traversal-safe and scoped to the repo root
+      (`sift.paths`, pulled forward from P2)
+- [x] Secrets redacted from every materialized span before the bundle leaves
+      the builder (D8)
+- [x] `sift context dump <sarif>` writes `ContextBundle` JSON **for human
+      review before any model sees it**, both the plain and untrusted-delimited
+      form side by side (D9)
+- [x] Reviewed and approved by the maintainer, against real bundles built
+      from real Flask source at the pinned corpus commit, not only the
+      synthetic fixture project
 
 **Done means:** context quality is inspected and signed off. It caps triage quality.
+
+**Scope notes**
+
+- *The review surfaced the finding that defines P4.* Of 16 real Semgrep Flask
+  findings, 14 came back `INSUFFICIENT` — 12 because the finding landed in a
+  `.html` template or `pyproject.toml` (correctly unparseable as Python, not a
+  bug), 2 from a genuine `eval()`/`exec()` on the path. Of 8 CodeQL findings,
+  all 8 were `COMPLETE`, and all 8 were inside Flask's own test files. D6
+  forces `INSUFFICIENT` to `NEEDS_HUMAN_REVIEW`; C1 already forbids dismissing
+  test-file findings. Net effect: the P1/P2 corpus, run through the P3
+  builder, is dominated by findings this tool cannot or should not adjudicate
+  at all. That is D6 and C1 working exactly as designed — and it means the
+  existing corpus cannot evaluate a triage pipeline. P4's dataset must be
+  built from findings that are actually triagable, not reused from P1/P2.
+- *A caller-graph and dynamic-dispatch heuristic bug class, found by running
+  against real code three separate times*, not by review: a span-budget
+  counter shared across the whole bundle instead of scoped to the caller walk
+  alone; a blind `str.replace()` while fixing that which silently turned an
+  early return unconditional and made half a function permanently dead code;
+  and a test fixture whose load-bearing line numbers were silently shifted by
+  `ruff format` auto-fixing an import order. All three are fixed, and the
+  practice — measure against real input, rerun rather than re-read a diff to
+  verify a fix — is now standing practice for every later phase.
+- *AC6 (closing the P1 positional-identity gap) was measured against real
+  pinned-commit source, not simulated*: 8 of 103 corpus findings were
+  positional, all 8 upgrade to stable `content` identity once the real source
+  line is supplied.
 
 ---
 

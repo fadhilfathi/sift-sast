@@ -569,6 +569,44 @@ Correlation ID and cache key are *specified* here and the correlation ID is
 `ContextBundle` is populated in P3 and the prompts exist in P5. It is documented now
 because the correlation ID's design only makes sense against it.
 
+### Measured, P3: closing the positional-identity gap
+
+P1 left one gap open: a finding with neither an upstream fingerprint nor a
+snippet degrades to `POSITIONAL` identity, which detaches on any line shift
+above it. `correlate(..., source_line=...)` existed from P1 to close it once a
+real source line was available; P3's context builder is what makes one
+available.
+
+Measured against the corpus rather than assumed closed:
+
+| Corpus half | Positional findings | 
+| --- | --- |
+| `evals/fixtures/generated/` (real scanner output) | 8 of 103 |
+| `evals/fixtures/handcrafted/` (adversarial, deliberately minimal) | 29 of 32 |
+
+All 8 positional findings in the **generated** half are CodeQL results against
+`expressjs/express` at the pinned commit, each on the line `app.use(session({`
+in one of four example files. The real source at that pinned commit was
+fetched and each one re-measured directly against it — not simulated:
+
+```
+examples/auth/index.js:22     positional -> content   stable=True
+examples/mvc/index.js:40      positional -> content   stable=True
+examples/session/index.js:16  positional -> content   stable=True
+examples/session/redis.js:20  positional -> content   stable=True
+```
+(× 2, once per CodeQL query suite the fixture generator ran) — **8 of 8 upgrade,
+all become stable.**
+
+The 29 positional findings in the **handcrafted** half mostly do not have a
+matching checked-out repository — they are synthetic SARIF documents built to
+probe round-trip and schema behavior in P1/P2, not paired with real source
+trees, so most cannot be re-measured this way and are not expected to be: that
+corpus exists to test parsing, not identity upgrade. The mechanism itself is
+covered independently by `test_supplying_the_real_source_line_upgrades_positional_identity`
+in `tests/test_context_builder.py`, using the committed `python_project`
+fixture, and by the builder integration tests exercising the same code path.
+
 ## Lossless round-trip
 
 > **Decision D2**, settled before P1 implementation.
@@ -676,7 +714,7 @@ Supporting types: `CodeSpan` (verbatim source slice), `CallSite`, `FlowStep`,
 
 ```python
 class Adjudication(BaseModel):
-    finding_fingerprint: str
+    correlation_id: str
     verdict: Verdict                   # TRUE_POSITIVE|FALSE_POSITIVE|NEEDS_HUMAN_REVIEW
     confidence: float                  # 0.0-1.0
     justification: str                 # max 500 chars, must cite specific code
@@ -694,6 +732,155 @@ was rebutted), `FileLineRef`, `TriageResult` (adjudication + arguments +
 
 `Adjudication` uses `validate_assignment=True`, so the safety rule re-runs on
 mutation — a later edit cannot sneak a weak dismissal through.
+
+## Evaluation (P4)
+
+The P3 review produced the fact P4 has to design around: of 16 real Semgrep
+Flask findings, 14 came back `INSUFFICIENT` (12 non-Python files correctly
+refused, 2 genuine `eval`/`exec` findings correctly escalated); of 8 CodeQL
+findings, all 8 were `COMPLETE` and all 8 were inside Flask's own test files,
+which C1 already forbids dismissing. **D6 and C1 are each working correctly.
+The consequence is that the P1/P2 corpus cannot evaluate a triage pipeline** —
+it is dominated by findings this tool cannot or should not adjudicate at all.
+D10–D13 below are the response: a dataset built for triability, metrics that
+cannot hide behind a low-coverage subset, a baseline built to beat the
+architecture rather than flatter it, and contamination treated as the default
+assumption rather than a risk to check for after the numbers look good.
+
+### D10 — Dataset inclusion criteria, committed before labeling
+
+> **Decision D10**, settled before P4 labeling begins.
+
+**Minimum 100 findings, class-balanced true/false positive, every one with
+`ContextBundle.completeness` in `{COMPLETE, PARTIAL}`.** An `INSUFFICIENT`
+finding is not evaluable — it is a correct escalation regardless of the true
+label, and including it would let the pipeline score points for D6 doing its
+job rather than for adjudicating anything.
+
+The criteria are committed *before* any label is assigned, in this file, so no
+entry can be admitted later because it happens to help the numbers. Changing
+this section after labeling starts is itself a reportable event, not a normal
+edit.
+
+**Per entry, required:**
+
+| Field | Requirement |
+| --- | --- |
+| `finding` | The SARIF result, or enough to reconstruct one |
+| `repo` | A pinned commit SHA — never a branch, never "latest" |
+| `ground_truth` | `TRUE_POSITIVE` or `FALSE_POSITIVE` |
+| `rationale` | Written, citing specific code — not "obviously a TP" |
+| `provenance` | One of: `OWASP_BENCHMARK`, `JULIET`, `CVE_FIX`, `HAND_LABELED` |
+| `labeled_by` | Who or what decided it — a person's name, or the CVE/commit that decided it for us |
+
+**Provenance sets the evidentiary bar, not just a tag:**
+
+- **`CVE_FIX`** — a real CVE, its fix commit, and the pre-fix state at the
+  commit before it. The label is defensible by construction: the code the fix
+  touched was vulnerable, the code after was not (modulo the fix itself being
+  wrong, which is rare enough to accept). This is the strongest provenance
+  available and should be the largest bucket if the corpus permits.
+- **`OWASP_BENCHMARK` / `JULIET`** — synthetic, purpose-built test cases with
+  a published ground truth. Strong labels, weak realism — see D13 on why they
+  cannot be trusted alone.
+- **`HAND_LABELED`** — anything else. Requires the fullest `rationale`: the
+  specific code path, why it is or is not exploitable, and what would change
+  the answer. A hand label with no rationale a stranger could audit does not
+  meet the bar, full stop.
+
+**Rejection is measured and reported, not discarded silently.** Every
+candidate finding that was considered and did not make the dataset is counted
+against the reason it was rejected (`INSUFFICIENT` completeness, non-Python,
+ambiguous ground truth, duplicate, …). *The rejection rate is a headline
+number about how much of a real repository's findings this tool can currently
+reason about at all* — it is reported in `evals/REPORT.md` with the same
+visibility as precision and recall, not buried in a dataset-construction note.
+
+### D11 — Completeness-stratified metrics, always
+
+> **Decision D11**, settled before P4 implementation.
+
+Precision and recall computed over a set that already excluded most
+low-completeness findings — which D10 requires — describe the tool on an
+easy subset. Reported alone, that number is not wrong, but it is not
+comparable to "precision on everything this tool sees," and nothing may
+imply that it is.
+
+**Every metrics table in `evals/REPORT.md` and the eventual README reports
+three numbers together, never one without the others:**
+
+1. **Coverage** — the fraction of findings that reach adjudication at all
+   (`completeness != INSUFFICIENT`), out of everything the dataset or a real
+   run presented.
+2. **Accuracy on the covered subset** — precision, recall, and false
+   suppression rate, computed only over what was actually adjudicated.
+3. **Escalation rate** — the fraction that became `NEEDS_HUMAN_REVIEW`,
+   whether by the confidence floor, an unrebutted objection, or `INSUFFICIENT`
+   completeness. Broken down by cause where the report has room to.
+
+**The rule this exists to enforce:** *a tool with 95% precision at 5% coverage
+and a tool with 80% precision at 70% coverage are different products, and no
+document produced by this project may quote the accuracy number without the
+coverage number in the same breath.* A README section, a Slack summary, a
+release note — none may state precision or recall without stating coverage
+beside it. This is checked the same way the false-suppression-rate ordering is
+checked: by reading the actual document before it ships, not by trusting that
+whoever wrote it remembered.
+
+### D12 — The baseline is adversarial to the four-agent thesis
+
+> **Decision D12**, settled before P4 implementation.
+
+The single-prompt baseline built in P4 gets the same `ContextBundle`, the same
+output schema (`Adjudication`, including the safety rule), and a genuinely
+good prompt — not a strawman. **The baseline's job is to try to beat the
+architecture, not to lose gracefully to it.** If it matches or beats the
+four-agent pipeline once P5 exists, the roadmap's own honesty clause fires:
+multi-agent gets cut, and the README says so plainly. Building the baseline
+weak in order to make P5 look necessary would be tuning the eval to agree with
+the architecture, which `CONTRIBUTING.md` already forbids.
+
+**A second control, trivial by construction: label every finding
+`NEEDS_HUMAN_REVIEW`, unconditionally.** This is not a baseline anyone would
+ship — it has zero usefulness, since it never resolves anything. It exists
+because it scores a *perfect* false suppression rate (0%, since nothing is
+ever wrongly dismissed) while being useless, which makes it the calibration
+line for the safety metric: **any real system's false-suppression-rate claim
+must be read against how far above this free, zero-effort floor it manages to
+climb while still resolving something.** A false suppression rate alone, with
+no coverage or escalation rate beside it, could describe this control just as
+easily as it could describe a working pipeline — which is D11's point again,
+from the other direction.
+
+### D13 — Contamination is the default assumption
+
+> **Decision D13**, settled before P4 implementation.
+
+OWASP Benchmark and the Juliet Test Suite are public, widely mirrored, and
+have been public for years before any current model's training cutoff. A
+model can score well on them by having memorized the answer key, not by
+reasoning about the code — and there is no way to distinguish the two from
+the score alone. The default assumption is contamination, not the default
+hope against it.
+
+**Structural response, not a disclaimer:**
+
+- **Report subsets separately, always**: a `public_benchmark` subset
+  (OWASP + Juliet), a `cve_fix` subset, and a `private_hand_labeled` subset.
+  Never a single blended number across all three.
+- **The private hand-labeled subset is the number that counts.** It is drawn
+  from a repository chosen for being unlikely to be memorized — small,
+  low-profile, and ideally including code written or modified after any
+  model's training cutoff. Every headline claim this project makes about
+  accuracy is qualified by which subset it came from, and the private subset
+  is the one the README leads with if the two disagree.
+- **A metric jump on the public subset above a stated threshold — provisionally
+  10 percentage points run over run with no corresponding code or prompt
+  change — is flagged as probable contamination before it is reported as an
+  improvement.** `eval-engineer` owns this check per `CONTRIBUTING.md`, and is
+  already forbidden from editing prompts or app code to move a number; this
+  extends the same discipline to *interpreting* a suspiciously good number,
+  not only to producing one.
 
 ## Backward compatibility
 
