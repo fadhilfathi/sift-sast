@@ -10,7 +10,7 @@ from sift.models import Adjudication, FileLineRef, Objection, Verdict
 
 def make(**kw: object) -> Adjudication:
     base: dict[str, object] = {
-        "finding_fingerprint": "abc123",
+        "correlation_id": "abc123",
         "verdict": Verdict.FALSE_POSITIVE,
         "confidence": 0.99,
         "justification": "input is a compile-time constant at config.py:12",

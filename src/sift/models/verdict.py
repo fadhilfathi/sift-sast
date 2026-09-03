@@ -84,7 +84,7 @@ class Adjudication(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
-    finding_fingerprint: str
+    correlation_id: str
     verdict: Verdict
     confidence: float = Field(ge=0.0, le=1.0)
     justification: str = Field(
