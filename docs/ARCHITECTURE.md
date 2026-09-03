@@ -46,9 +46,60 @@ Every finding that enters leaves. Stage 1 short-circuits to Stage 4 with a
 
 ## Stage 1 — deterministic pre-filter
 
-No LLM calls. Deduplicates by fingerprint, then applies rule-based file
-classification (`FileClass`). The fraction of findings resolved here is the
-**baseline every later stage must beat** — measured in P2 and reported.
+No LLM calls. Deduplicates by correlation ID, then applies rule-based file
+classification (`FileClass`).
+
+### Measured baseline
+
+Over the 103 real findings in the fixture corpus:
+
+| | |
+| --- | --- |
+| Findings | 103 |
+| Deduplicated | 0 |
+| Reached adjudication | 103 |
+| **Settled without a model** | **0.0%** |
+| File classes | `UNKNOWN` 87, `TEST` 16 |
+| Dismissible if every class were opted in | 16 (15.5%) |
+
+**Zero.** That is the number later stages are measured against, and it is far
+below what the design anticipated. Two reasons, both worth stating rather than
+tuning away:
+
+1. Each fixture is a single scan of a distinct repository, so there is nothing to
+   deduplicate. Deduplication earns its keep across re-scans and across tools on
+   one repository, which the corpus does not yet contain.
+2. Classification does not dismiss anything — see below.
+
+### Classification does not dismiss
+
+The design anticipated test, vendored, generated, and fixture files being
+"resolvable without a model". Examined one at a time, none of them is:
+
+- **vendored** — Log4Shell was vendored. A vulnerable dependency is a real
+  vulnerability; the fix is an upgrade, not a dismissal.
+- **generated** — the code still ships and still runs. The fix belongs in the
+  generator, which makes it harder to action, not less real.
+- **test** — hardcoded credentials in tests are real credentials, and test
+  helpers get imported by production code.
+- **fixture** — the classic home of a committed private key.
+
+Each would be a silent dismissal with no model and no human in the loop, which is
+the failure carrying the ~50x cost. So `SAFE_TO_RESOLVE` is empty by default, the
+classification rides along as evidence for the adjudicator, and every run prints
+what each class *would* have removed so the policy is chosen against numbers. A
+caller who accepts the risk opts in per class with `--resolve-class`.
+
+### Classifier precision
+
+Rules match whole path segments, never substrings: `src/nodes/` is not
+`node_modules`, `app/contest/` is not a test, `lib/attestation.py` is not a test.
+Ambiguous directory names are deliberately excluded — `examples`, `sample`,
+`samples`, `migrations`, `gen`, `out`, `obj`. Example code is code users copy into
+their own projects, and migrations are hand-edited and run against production.
+
+Measured: including `examples` would have classified 64 of 103 real findings as
+dismissible fixtures. Excluding it, misclassification of real source is 0.
 
 ## Stage 2 — Context Builder
 

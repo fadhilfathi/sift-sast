@@ -29,12 +29,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   generator, plus eight handcrafted adversarial documents.
 - Schema validation against a vendored official SARIF 2.1.0 schema, asserting that
   a round trip never adds a violation.
+- Stage 1 deterministic pre-filter (`sift.prefilter`): deduplication by
+  correlation ID and `FileClass` classification, with a `resolved_by` label and a
+  justification on every decision and an asserted finding-count invariant.
+- `sift.paths`: traversal-safe resolution of SARIF artifact URIs, refusing
+  parent-directory escapes, absolute and UNC paths, and symlinks leaving the repo.
+- `sift explain-policy` and `--resolve-class`, so dismissing a file class is an
+  explicit opt-in made against printed numbers.
 - Documentation: `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/OPERATIONS.md`,
   `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, README skeleton.
 - CI workflows: `ci`, `eval`, `release`, `security`, `fixtures`; Dependabot for pip
   and github-actions.
 
 ### Fixed
+
+- Correlation IDs no longer merge distinct findings when a scanner emits a
+  placeholder fingerprint. Semgrep sends `matchBasedId/v1: "requires login"` when
+  unauthenticated; keying on it collapsed 45 findings into one and dismissed 44
+  as duplicates. Identity is now bound to the finding's own rule and location at
+  every tier, and non-discriminating fingerprint values are rejected.
 
 - Ingest refuses a document with no `runs` key rather than parsing it into an empty
   log and reporting zero findings.

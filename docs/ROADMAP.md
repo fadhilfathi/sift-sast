@@ -71,22 +71,53 @@ against four pinned OSS repos, 8 handcrafted adversarial. 135 findings.
 
 ---
 
-## ☐ P2 — Deterministic pre-filter
+## ☑ P2 — Deterministic pre-filter
 
-Zero LLM calls.
+Zero LLM calls. Nothing tagged.
 
 **Acceptance criteria**
 
-- [ ] Dedupe by fingerprint
-- [ ] `FileClass` detection for test, vendored, generated, fixture files
-- [ ] Every resolution carries a `resolved_by` label and a justification. Nothing
-      is deleted.
-- [ ] Prints the fraction of findings resolved with no model — **this number is the
-      baseline every later stage must beat**, and it goes in the report
-- [ ] Precision of the pre-filter itself measured: how often does it mislabel a
-      real source file as a test or vendored file? Target 0.
+- [x] Dedupe by correlation ID
+- [x] `FileClass` detection for test, vendored, generated, fixture files
+- [x] Every resolution carries a `resolved_by` label and a justification. Nothing
+      is deleted; `len(decisions) == len(refs)` is asserted.
+- [x] Prints the fraction of findings resolved with no model
+- [x] Precision of the pre-filter itself measured. 0 real-source misclassifications.
 
-**Done means:** the baseline is measured and committed.
+**Measured baseline: 0.0% settled without a model** (0 of 103 corpus findings).
+
+**Scope notes**
+
+- *The baseline is zero, and that is the finding.* Deduplication had nothing to
+  collapse — each fixture is one scan of a distinct repo — and classification
+  deliberately dismisses nothing. If every class were opted in it would be 15.5%.
+- **`SAFE_TO_RESOLVE` is empty by default.** The design anticipated test,
+  vendored, generated, and fixture files being resolvable without a model. None
+  of them is: Log4Shell was vendored, generated code still ships, test
+  credentials are real credentials, and fixtures are where private keys get
+  committed. The classification is attached as evidence instead, and
+  `--resolve-class` lets a caller opt in per class against printed numbers.
+- *A serious bug was found and fixed by disbelieving a good number.* The first
+  run reported 97.8% settled. Semgrep emits the placeholder `"requires login"` as
+  `matchBasedId/v1` when unauthenticated, and keying on it collapsed 45 findings
+  across 20 files and several rules into one correlation ID — 44 real findings
+  dismissed as duplicates of each other. Every identity tier is now bound to the
+  finding's own rule and location, and a fingerprint value that spans multiple
+  rules or locations within a run is rejected as non-discriminating. Corpus-wide:
+  103 findings, 103 distinct IDs. The same detector caught degenerate hashes in
+  CodeQL output too.
+- *Content identity needed an occurrence ordinal.* Excluding the line number
+  keeps an ID stable when lines shift above it, but made the same rule on two
+  byte-identical lines in one file collapse. Colliding findings at different
+  lines now get an ordinal in line order; at the same line they stay merged,
+  which is what dedupe is for.
+- *`sift.paths` lands early.* The classifier reads file heads to find
+  generated-code markers, so traversal-safe resolution was needed now rather than
+  in P3. Symlinks are followed before the containment check, which is the case a
+  string-prefix comparison misses. P3 reuses it.
+- *Absolute `file:` URIs are refused.* Scanners emit them naming the scan
+  machine's checkout, and there is no sound way to rebase one onto a different
+  root. The classifier falls back to path-string heuristics.
 
 ---
 
