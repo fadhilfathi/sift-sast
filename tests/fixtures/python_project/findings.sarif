@@ -1,0 +1,31 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "handcrafted", "version": "0.0.0" } },
+      "results": [
+        {
+          "ruleId": "command-injection",
+          "message": { "text": "Untrusted input reaches a shell command." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/app.py" }, "region": { "startLine": 27 } } }
+          ]
+        },
+        {
+          "ruleId": "dynamic-dispatch",
+          "message": { "text": "Dynamic dispatch obscures the real callee." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/app.py" }, "region": { "startLine": 36 } } }
+          ]
+        },
+        {
+          "ruleId": "hardcoded-credential",
+          "message": { "text": "A hardcoded credential is returned." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "src/app.py" }, "region": { "startLine": 40 } } }
+          ]
+        }
+      ]
+    }
+  ]
+}
