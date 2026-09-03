@@ -21,10 +21,12 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Typing :: Typed",
 ]
+# The LLM provider SDK is deliberately absent until P5, when
+# sift.llm.provider exists to use it. Declaring a dependency nothing imports is
+# how a lockfile grows things nobody can justify.
 dependencies = [
   "pydantic>=2.9",
   "typer>=0.15",
-  "anthropic>=0.40",
   "tree-sitter>=0.23",
   "tree-sitter-python>=0.23",
 ]
