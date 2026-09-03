@@ -747,6 +747,76 @@ cannot hide behind a low-coverage subset, a baseline built to beat the
 architecture rather than flatter it, and contamination treated as the default
 assumption rather than a risk to check for after the numbers look good.
 
+### Measured: real-world SARIF from these four repos cannot supply the dataset
+
+Before D10 could be applied, the question it presupposes had to be answered:
+how much of the corpus is even triable? `evals/measure_triability.py` runs
+every one of the 103 generated-corpus findings through the real P3 builder
+against the real pinned-commit checkout of all four target repos, stratified
+by cause rather than aggregated into one percentage — the aggregate would
+hide which of five very different problems is responsible.
+
+```
+total findings measured: 103
+
+by repo:
+  expressjs-express: {'non_python_source': 55}
+  google-gson:        {'non_python_source': 2}
+  gorilla-mux:        {'non_python_source': 11}
+  pallets-flask:      {'non_python_source': 12, 'python_dynamic_dispatch': 4,
+                        'python_file_class_test': 16, 'triable': 3}
+
+aggregate, stratified:
+  non_python_source                            80  (77.7%)
+  python_file_class_test                       16  (15.5%)
+  python_dynamic_dispatch                       4  ( 3.9%)
+  triable                                       3  ( 2.9%)
+```
+
+**2.9%. Three findings, out of 103, are even eligible for D10's dataset
+criteria.** Each stratum demands a different response, and none of them is
+"build the harness against this corpus anyway":
+
+- **`non_python_source` (77.7%)** — the context builder is Python-only by
+  P3's explicit scope; JavaScript (express), Java (gson), and Go (mux) were
+  never going to be triable, and their presence in the corpus is a corpus
+  artifact, not a finding about the tool. This number will not move until a
+  language beyond Python exists (`CONTRIBUTING.md`'s "adding a language"
+  section), and reads that way in every report from here on.
+- **`python_file_class_test` (15.5%)** — every one of these is COMPLETE, the
+  builder works correctly on them, and C1 still forbids treating a test-file
+  finding as dismissible. They are real, triable Python findings that D10's
+  completeness bar admits — but promoting them into the dataset without
+  further thought would make "the eval dataset" mean "Flask's own test
+  suite," which is not a representative sample of anything. Whether any of
+  these 16 belong in the dataset is a labeling decision for D10, not decided
+  here.
+- **`python_dynamic_dispatch` (3.9%)** — two real findings
+  (`flask/cli.py:1023`, `flask/config.py:209`), each reported twice across
+  overlapping Semgrep rulesets. Genuine `eval`/`exec` calls, correctly
+  escalated by D6. This is very plausibly an **irreducible limitation of
+  static analysis on dynamically-dispatched Python**, not a context-builder
+  bug to fix before P5 — recorded as a candidate README limitation now,
+  pending more data before it is stated as a firm claim.
+- **`triable` (2.9%, 3 findings)** — `flask/json/tag.py:188`,
+  `flask/sessions.py:281` (flagged by two overlapping rulesets, hence
+  appearing as 3 raw results rather than 2 distinct findings). Three
+  findings is far too few for any dataset regardless of label distribution,
+  and none of the three have a ground-truth label yet — assigning one
+  without the rationale D10 requires would be exactly the shortcut D10
+  exists to prevent.
+
+**Consequence for D10 and the order of work: this repo corpus cannot supply
+the ≥100-finding dataset.** The public-benchmark, CVE-fix, and
+hand-labeled routes in D10/D13 are not a fallback for a future problem — they
+are the only viable route, starting now. This also sharpens D13's warning
+about a thin private holdout: if OWASP/Juliet supplies the bulk of the count
+under an assumption of contamination, and real-world SARIF supplies next to
+nothing, the CVE-fix and hand-labeled subsets are carrying essentially all of
+the weight behind "the number that counts" — and if those two subsets end up
+small, the README must say the claim rests on a small private holdout, in
+those words, rather than let a headline number stand unqualified.
+
 ### D10 — Dataset inclusion criteria, committed before labeling
 
 > **Decision D10**, settled before P4 labeling begins.
