@@ -253,6 +253,11 @@ def entropy_class(value: str) -> EntropyClass:
     return EntropyClass.HIGH
 
 
+def format_secret_placeholder(kind: SecretKind, length: int, entropy: EntropyClass) -> str:
+    """The exact text substituted for a redacted value. ASCII only."""
+    return f"<<REDACTED:kind={kind.value.lower()},len={length},entropy={entropy.value.lower()}>>"
+
+
 class RedactedSecret(BaseModel):
     """A secret-shaped literal that was in the source and is not anymore.
 
@@ -272,10 +277,7 @@ class RedactedSecret(BaseModel):
 
     def placeholder(self) -> str:
         """The exact text substituted for the value in `CodeSpan.source`."""
-        return (
-            f"<<REDACTED:kind={self.kind.value.lower()},"
-            f"len={self.length},entropy={self.entropy_class.value.lower()}>>"
-        )
+        return format_secret_placeholder(self.kind, self.length, self.entropy_class)
 
 
 class ContextBundle(BaseModel):
