@@ -191,6 +191,11 @@ the architecture.
 - [ ] `action.yml` works as `uses: fadhilfathi/sift-sast@v1` against a real repo
 - [ ] Markdown PR comment, grouped by verdict, true positives first
 - [ ] README carries **real measured numbers** and a recorded terminal demo
+- [ ] README limitations/findings section includes, verbatim from
+      `docs/ARCHITECTURE.md`: the GitHub-ignores-SARIF-suppressions finding (P1)
+      and the upstream-fingerprint-is-not-automatically-an-identity finding (P2)
+      — both are design principles other people building on SARIF need, not
+      internal trivia
 - [ ] Adversarial review pass over the whole pipeline, findings triaged: every
       path where a real vulnerability could be silently dismissed, plus the
       threat model in `SECURITY.md`
