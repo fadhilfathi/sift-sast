@@ -112,3 +112,27 @@ def read_text_head(path: Path, *, max_lines: int = 5, max_bytes: int = 8192) -> 
             return "".join(lines)
     except (OSError, ValueError):
         return ""
+
+
+#: A file bigger than this is refused for full-text reads rather than parsed.
+#: A source file legitimately needing more than this is rare; a SARIF finding
+#: pointing at one is more likely pointing at a vendored bundle or generated
+#: blob that FileClass should have caught first.
+_MAX_FULL_READ_BYTES = 2_000_000
+
+
+def read_text_full(path: Path, *, max_bytes: int = _MAX_FULL_READ_BYTES) -> str | None:
+    """Read a whole file's text, for parsing rather than classification.
+
+    Returns None — never partial content — for anything that is not a clean
+    read: missing, unreadable, not valid UTF-8, or over the size cap. A parser
+    fed a silently truncated file would report confidently wrong line numbers
+    for everything after the cut, which is worse than admitting it could not
+    read the file at all.
+    """
+    try:
+        if path.stat().st_size > max_bytes:
+            return None
+        return path.read_text(encoding="utf-8")
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None

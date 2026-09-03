@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from sift.paths import UnsafePathError, normalize_uri, read_text_head, resolve
+from sift.paths import UnsafePathError, normalize_uri, read_text_full, read_text_head, resolve
 
 
 @pytest.fixture
@@ -183,3 +183,30 @@ def test_windows_drive_paths_are_refused_on_every_host(repo: Path, uri: str) -> 
     """
     with pytest.raises(UnsafePathError):
         resolve(repo, uri)
+
+
+def test_read_text_full_reads_a_normal_file(tmp_path: Path) -> None:
+    target = tmp_path / "a.py"
+    target.write_text("x = 1\ny = 2\n", encoding="utf-8")
+    assert read_text_full(target) == "x = 1\ny = 2\n"
+
+
+def test_read_text_full_returns_none_for_missing_file(tmp_path: Path) -> None:
+    assert read_text_full(tmp_path / "nope.py") is None
+
+
+def test_read_text_full_returns_none_over_the_size_cap(tmp_path: Path) -> None:
+    target = tmp_path / "big.py"
+    target.write_text("x" * 100, encoding="utf-8")
+    assert read_text_full(target, max_bytes=10) is None
+
+
+def test_read_text_full_returns_none_never_partial(tmp_path: Path) -> None:
+    """A parser fed truncated content reports confidently wrong line numbers.
+
+    None is the only acceptable failure value here - never a cut-off string.
+    """
+    target = tmp_path / "big.py"
+    target.write_bytes(b"a" * 50)
+    result = read_text_full(target, max_bytes=10)
+    assert result is None
