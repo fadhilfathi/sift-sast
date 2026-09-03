@@ -28,6 +28,10 @@ htmlcov/
 evals/runs/
 !evals/runs/.gitkeep
 
+# Local working notes and editor/agent tooling config. Not part of the project.
+CLAUDE.md
+.claude/
+
 # OneDrive / OS noise
 Thumbs.db
 desktop.ini

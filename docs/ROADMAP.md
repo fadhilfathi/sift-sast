@@ -20,7 +20,7 @@ Tag nothing.
 - [x] The safety rule enforced in the schema and covered by tests
 - [x] Four workflows: `ci`, `eval`, `release`, `security`; plus `dependabot.yml`
 - [x] LICENSE, README skeleton, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, templates
-- [x] Six subagents and six slash commands under `.claude/`
+- [x] Contributor workflow documented in `CONTRIBUTING.md`
 - [x] `make gate` green locally, CI green on `main`
 - [x] No attribution trailer in any commit (`git log --format=%B`)
 
@@ -160,5 +160,7 @@ the architecture.
 - [ ] `action.yml` works as `uses: fadhilfathi/sift@v1` against a real repo
 - [ ] Markdown PR comment, grouped by verdict, true positives first
 - [ ] README carries **real measured numbers** and a recorded terminal demo
-- [ ] `/redteam` pass by `adversarial-reviewer`, findings triaged
+- [ ] Adversarial review pass over the whole pipeline, findings triaged: every
+      path where a real vulnerability could be silently dismissed, plus the
+      threat model in `SECURITY.md`
 - [ ] CHANGELOG complete, repo flipped public, **v0.1.0** tagged from a green `main`

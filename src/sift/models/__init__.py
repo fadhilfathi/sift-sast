@@ -1,4 +1,9 @@
-"""Pydantic schemas. Changes here route through the schema-guardian subagent."""
+"""Pydantic schemas.
+
+The interop contract between pipeline stages and across versions. Additive
+optional fields are safe; removals, tightened constraints, and changed meanings
+are breaking and need a CHANGELOG entry. See CONTRIBUTING.md.
+"""
 
 from sift.models.context import (
     CallSite,

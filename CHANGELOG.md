@@ -30,7 +30,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Schema validation against a vendored official SARIF 2.1.0 schema, asserting that
   a round trip never adds a violation.
 - Documentation: `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/OPERATIONS.md`,
-  `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, README skeleton.
+  `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, README skeleton.
 - CI workflows: `ci`, `eval`, `release`, `security`, `fixtures`; Dependabot for pip
   and github-actions.
 
