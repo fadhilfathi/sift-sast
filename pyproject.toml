@@ -61,7 +61,10 @@ line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
 # Docs carry aligned Python snippets for readability; ruff would reflow them.
-extend-exclude = ["*.md"]
+# tests/fixtures/python holds synthetic source fed to the context builder's
+# tree-sitter queries under test - unused imports, getattr dispatch, and
+# undefined names are the point, not lint debt.
+extend-exclude = ["*.md", "tests/fixtures/python/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "PTH", "RUF", "S"]
@@ -75,6 +78,9 @@ ignore = ["S101"]
 python_version = "3.11"
 strict = true
 files = ["src", "tests", "evals"]
+# Same reason as the ruff extend-exclude above: synthetic tree-sitter fixtures,
+# never imported, never meant to type-check.
+exclude = ["tests/fixtures/python/"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 disallow_any_explicit = false
