@@ -48,7 +48,7 @@ jobs:
       - name: Run eval
         if: github.event_name == 'schedule' || inputs.dry_run == false
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SIFT_API_KEY: ${{ secrets.SIFT_API_KEY }}
         run: uv run sift eval --report evals/REPORT.md
 
       - name: Upload metrics report

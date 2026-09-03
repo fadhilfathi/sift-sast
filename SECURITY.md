@@ -5,7 +5,7 @@
 Do **not** open a public issue for a security vulnerability.
 
 Report it privately through GitHub Security Advisories:
-[Report a vulnerability](https://github.com/fadhilfathi/sift/security/advisories/new)
+[Report a vulnerability](https://github.com/fadhilfathi/sift-sast/security/advisories/new)
 
 Please include:
 

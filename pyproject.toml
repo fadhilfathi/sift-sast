@@ -46,10 +46,10 @@ dev = [
 sift = "sift.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/fadhilfathi/sift"
-Repository = "https://github.com/fadhilfathi/sift"
-Issues = "https://github.com/fadhilfathi/sift/issues"
-Changelog = "https://github.com/fadhilfathi/sift/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/fadhilfathi/sift-sast"
+Repository = "https://github.com/fadhilfathi/sift-sast"
+Issues = "https://github.com/fadhilfathi/sift-sast/issues"
+Changelog = "https://github.com/fadhilfathi/sift-sast/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sift"]

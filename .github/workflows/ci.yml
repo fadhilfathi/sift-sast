@@ -15,7 +15,7 @@ concurrency:
 
 env:
   # No agent may spend money in CI. Unit tests marked `llm` are deselected.
-  ANTHROPIC_API_KEY: ""
+  SIFT_API_KEY: ""
 
 jobs:
   test:

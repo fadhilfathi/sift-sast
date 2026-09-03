@@ -157,7 +157,7 @@ the architecture.
 
 **Acceptance criteria**
 
-- [ ] `action.yml` works as `uses: fadhilfathi/sift@v1` against a real repo
+- [ ] `action.yml` works as `uses: fadhilfathi/sift-sast@v1` against a real repo
 - [ ] Markdown PR comment, grouped by verdict, true positives first
 - [ ] README carries **real measured numbers** and a recorded terminal demo
 - [ ] Adversarial review pass over the whole pipeline, findings triaged: every

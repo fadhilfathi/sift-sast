@@ -22,7 +22,7 @@ reproducible rather than living only in someone's browser tab.
 
 ## Branch protection
 
-`gh api -X PUT repos/fadhilfathi/sift/branches/main/protection` and the rulesets
+`gh api -X PUT repos/fadhilfathi/sift-sast/branches/main/protection` and the rulesets
 API both return:
 
 ```
@@ -36,8 +36,8 @@ linear history; no force pushes; no deletions; conversation resolution required.
 Apply it the moment the repo goes public or the account upgrades:
 
 ```bash
-gh api -X POST repos/fadhilfathi/sift/rulesets --input .github/ruleset.json
-gh api repos/fadhilfathi/sift/rulesets --jq '.[]|{id,name,enforcement}'
+gh api -X POST repos/fadhilfathi/sift-sast/rulesets --input .github/ruleset.json
+gh api repos/fadhilfathi/sift-sast/rulesets --jq '.[]|{id,name,enforcement}'
 ```
 
 Until then `main` is protected by convention only: `make gate` before every push,
@@ -95,9 +95,9 @@ The last row is why dismissals in P6 must go through
 
 | Secret | Used by | Set? |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | `eval.yml` | not set — the eval workflow's real run will fail until it is |
+| `SIFT_API_KEY` | `eval.yml` | not set — the eval workflow's real run will fail until it is |
 
-CI deliberately blanks `ANTHROPIC_API_KEY` and deselects the `llm` pytest marker,
+CI deliberately blanks `SIFT_API_KEY` and deselects the `llm` pytest marker,
 so no pull request can spend money.
 
 ## PyPI

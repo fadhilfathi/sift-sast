@@ -18,7 +18,7 @@ inputs:
     description: Root of the repository being analyzed.
     required: false
     default: .
-  anthropic-api-key:
+  api-key:
     description: API key for the LLM provider. Required unless dry-run is true.
     required: false
   budget-usd:
@@ -60,7 +60,7 @@ runs:
       id: triage
       shell: bash
       env:
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        SIFT_API_KEY: ${{ inputs.api-key }}
         SIFT_BUDGET_USD: ${{ inputs.budget-usd }}
       run: |
         uvx --from sift-sast sift triage "${{ inputs.sarif }}" \

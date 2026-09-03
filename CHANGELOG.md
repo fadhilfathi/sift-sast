@@ -49,4 +49,4 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   correlation ID that detaches when lines shift. P3 resolves this.
 - No triage yet. `sift triage` without `--dry-run` exits 2 until P5.
 
-[Unreleased]: https://github.com/fadhilfathi/sift/commits/main
+[Unreleased]: https://github.com/fadhilfathi/sift-sast/commits/main
