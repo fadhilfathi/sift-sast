@@ -157,3 +157,29 @@ def test_read_text_head_respects_byte_cap(tmp_path: Path) -> None:
     target = tmp_path / "one_long_line.py"
     target.write_text("x" * 100_000, encoding="utf-8")
     assert len(read_text_head(target, max_bytes=1024)) <= 1024
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "C:/Windows/win.ini",
+        r"C:\Windows\win.ini",
+        "c:/windows/win.ini",
+        "D:/data/x",
+        "c:",
+        "C:relative",
+    ],
+    ids=["upper", "backslash", "lower", "other-drive", "bare", "drive-relative"],
+)
+def test_windows_drive_paths_are_refused_on_every_host(repo: Path, uri: str) -> None:
+    """Refusal must not depend on which OS is running.
+
+    On Linux, `Path("C:/Windows/win.ini")` is neither absolute nor
+    drive-qualified — it is a relative path with a directory named `C:` — so a
+    check that asks pathlib silently accepts it there while refusing it on
+    Windows. CI caught exactly that. SIFT routinely runs on a Linux runner
+    against SARIF produced on a Windows developer machine, so the check is done
+    on the normalized string instead.
+    """
+    with pytest.raises(UnsafePathError):
+        resolve(repo, uri)

@@ -10,9 +10,17 @@ Everything that opens a file named by a finding goes through :func:`resolve`.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+#: Any Windows drive qualifier: `C:/x`, `C:`, and the drive-relative `C:x`.
+#: Matched on the normalized string so the verdict does not depend on which OS
+#: is running, and matched broadly because `C:x` means "relative to the current
+#: directory on drive C" — ambiguous, host-specific, and never a legitimate
+#: repo-relative SARIF URI.
+_WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:")
 
 
 class UnsafePathError(ValueError):
@@ -60,10 +68,16 @@ def resolve(repo_root: Path, uri: str) -> Path:
     if not relative or relative in {".", ".."}:
         raise UnsafePathError(f"empty or meaningless path: {uri!r}")
 
+    # Checked as strings, not through pathlib. On Linux, Path("C:/Windows") is
+    # neither absolute nor drive-qualified — it is a relative path with a
+    # directory named "C:" — so a host-flavour check silently accepts a
+    # Windows-absolute path. SIFT routinely runs on Linux against SARIF produced
+    # on Windows, so the refusal has to hold on either host.
+    if _WINDOWS_DRIVE.match(relative) or relative.startswith(("/", "//")):
+        raise UnsafePathError(f"absolute or UNC path refused: {uri!r}")
+
     candidate = Path(relative)
-    if candidate.is_absolute() or candidate.drive or relative.startswith("//"):
-        # Absolute paths, drive letters, and UNC shares never name something
-        # inside a repo-relative checkout.
+    if candidate.is_absolute() or candidate.drive:
         raise UnsafePathError(f"absolute or UNC path refused: {uri!r}")
 
     target = (root / candidate).resolve(strict=False)
