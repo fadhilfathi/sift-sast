@@ -12,6 +12,10 @@ import typer
 from sift import __version__, ingest, prefilter
 from sift.context.builder import build_context_bundle
 from sift.emit import sarif as emit_sarif
+from sift.eval.budget import DEFAULT_BUDGET_USD
+from sift.eval.config import EvalConfig, git_sha, hash_prompt_dir
+from sift.eval.dataset import load_dataset, load_rejected
+from sift.eval.harness import dry_run_estimate
 from sift.models.context import FileClass
 
 app = typer.Typer(
@@ -209,11 +213,64 @@ def context_dump(
 
 @app.command(name="eval")
 def run_eval(
+    dataset: Annotated[Path, typer.Option(help="Labeled dataset JSONL (D10 schema).")] = Path(
+        "evals/dataset/dataset.jsonl"
+    ),
+    rejected: Annotated[
+        Path, typer.Option(help="Rejected-candidates JSONL, for the D10 rejection rate.")
+    ] = Path("evals/dataset/rejected.jsonl"),
+    prompts: Annotated[
+        Path, typer.Option(help="Directory of prompt files, hashed into the report's config.")
+    ] = Path("src/sift/agents/prompts"),
     report: Annotated[Path, typer.Option(help="Markdown report path.")] = Path("evals/REPORT.md"),
+    budget: Annotated[
+        float, typer.Option(help="Hard abort budget in USD, checked before each call.")
+    ] = DEFAULT_BUDGET_USD,
+    temperature: Annotated[
+        float, typer.Option(help="Sampling temperature, stamped into config.")
+    ] = 0.0,
     dry_run: DryRun = False,
 ) -> None:
-    """Run the labeled eval suite and write the metrics report."""
-    _todo("P4")
+    """Run the labeled eval suite and write the metrics report.
+
+    Without --dry-run this exits 2: P4 step 5 (the naive baseline that
+    actually calls a model) is not built yet, and reporting a real eval score
+    with no baseline prompt to have produced it would be an unmeasured metric.
+    """
+    entries = load_dataset(dataset)
+    rejected_entries = load_rejected(rejected)
+    config = EvalConfig(
+        temperature=temperature,
+        prompt_hashes=hash_prompt_dir(prompts),
+        dataset_path=str(dataset),
+        corpus_sha=git_sha(dataset) if dataset.is_file() else None,
+        budget_usd=budget,
+    )
+
+    if dry_run:
+        estimate = dry_run_estimate(entries, config)
+        typer.echo(f"dataset:    {dataset}")
+        typer.echo(f"  labeled:  {len(entries)}    rejected: {len(rejected_entries)}")
+        typer.echo(f"model:      {config.baseline_model.value}   temperature: {config.temperature}")
+        typer.echo(f"prompts:    {config.prompt_hashes or '(none yet)'}")
+        typer.echo(f"calls:      {estimate.call_count}")
+        typer.echo(f"cost:       ${estimate.usd:.4f}   (budget ${budget:.2f})")
+        if not entries:
+            typer.secho(
+                "  no labeled dataset yet (P4 step 4) - cost is $0.00 because there is "
+                "nothing to score, not because a real run would be free",
+                fg=typer.colors.YELLOW,
+            )
+        if estimate.usd > budget:
+            typer.secho(
+                "ESTIMATED COST EXCEEDS BUDGET - a real run would abort before finishing",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        return
+
+    _todo("P4 step 5 (baseline scoring) - needs the dataset, a baseline prompt, and SIFT_API_KEY")
 
 
 @app.command(name="explain-policy")
@@ -223,9 +280,18 @@ def explain_policy() -> None:
 
 
 @app.command()
-def cost() -> None:
+def cost(
+    report: Annotated[Path, typer.Option(help="Markdown report to read.")] = Path(
+        "evals/REPORT.md"
+    ),
+) -> None:
     """Token spend and latency from the last eval run."""
-    _todo("P4")
+    if not report.is_file():
+        typer.secho(
+            f"no report at {report} yet - run `sift eval` first", fg=typer.colors.YELLOW, err=True
+        )
+        raise typer.Exit(code=1)
+    typer.echo(report.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
