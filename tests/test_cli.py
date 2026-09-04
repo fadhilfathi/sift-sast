@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from sift import __version__
@@ -87,9 +86,10 @@ def test_missing_input_exits_nonzero(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
-@pytest.mark.parametrize("command", ["eval", "cost"])
-def test_unbuilt_commands_exit_two(command: str) -> None:
-    result = runner.invoke(app, [command])
+def test_eval_without_dry_run_exits_two() -> None:
+    """P4 step 5 (baseline scoring) isn't built yet. `sift cost` is implemented
+    as of P4 step 3 - its own exit-code behavior is tested in test_cli_eval.py."""
+    result = runner.invoke(app, ["eval"])
     assert result.exit_code == 2
     assert "not implemented" in result.output
 
