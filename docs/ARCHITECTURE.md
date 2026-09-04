@@ -98,6 +98,18 @@ judgment. If a future change wants to populate `SAFE_TO_RESOLVE` by default, tha
 is a reversal of this decision and needs the same scrutiny D1/D2/D6-D9 got, not a
 one-line diff.
 
+**Clarified, P4: this rule and D6's completeness gate answer different
+questions, and P4 planning briefly conflated them.** C1 forbids one specific
+thing — a `TEST`-classified finding being auto-*resolved* into
+`Disposition.RESOLVED` without a model or a human ever looking at it. It says
+nothing about whether a test-file finding may be *adjudicated*. A finding that
+is `TEST`-classified and `COMPLETE` per D6 is exactly as eligible for the
+agents, and for a labeled dataset, as any other `COMPLETE` finding — hardcoded
+credentials in test fixtures are real credentials, and reasoning about them is
+precisely the job an adjudicator exists to do. What C1 rules out is a Stage 1
+shortcut that skips that reasoning entirely; it does not rule out the
+reasoning itself.
+
 **Two numbers, two different questions, never conflate them:**
 
 | | Meaning |
@@ -747,7 +759,7 @@ cannot hide behind a low-coverage subset, a baseline built to beat the
 architecture rather than flatter it, and contamination treated as the default
 assumption rather than a risk to check for after the numbers look good.
 
-### Measured: real-world SARIF from these four repos cannot supply the dataset
+### Measured: two true numbers that answer different questions
 
 Before D10 could be applied, the question it presupposes had to be answered:
 how much of the corpus is even triable? `evals/measure_triability.py` runs
@@ -773,24 +785,46 @@ aggregate, stratified:
   triable                                       3  ( 2.9%)
 ```
 
-**2.9%. Three findings, out of 103, are even eligible for D10's dataset
-criteria.** Each stratum demands a different response, and none of them is
-"build the harness against this corpus anyway":
+The same table supports two denominators, and **both are true, and neither
+should ever be quoted alone**:
 
-- **`non_python_source` (77.7%)** — the context builder is Python-only by
-  P3's explicit scope; JavaScript (express), Java (gson), and Go (mux) were
-  never going to be triable, and their presence in the corpus is a corpus
-  artifact, not a finding about the tool. This number will not move until a
-  language beyond Python exists (`CONTRIBUTING.md`'s "adding a language"
-  section), and reads that way in every report from here on.
-- **`python_file_class_test` (15.5%)** — every one of these is COMPLETE, the
-  builder works correctly on them, and C1 still forbids treating a test-file
-  finding as dismissible. They are real, triable Python findings that D10's
-  completeness bar admits — but promoting them into the dataset without
-  further thought would make "the eval dataset" mean "Flask's own test
-  suite," which is not a representative sample of anything. Whether any of
-  these 16 belong in the dataset is a labeling decision for D10, not decided
-  here.
+- **3 / 103 (2.9%)** meet D10's full dataset bar *on this specific
+  four-language corpus*. This is the honest answer to "what fraction of this
+  corpus could become dataset entries as-is."
+- **19 / 23 (82.6%)** of the *Python* findings — `python_file_class_test` (16)
+  plus `triable` (3) — produced adjudicable context. `python_dynamic_dispatch`
+  (4) was correctly escalated by D6, not a builder failure. This is the
+  honest answer to "when this tool is pointed at a language it supports, how
+  often does it produce something to reason about."
+- **80 / 103 (77.7%)** are excluded for *language*, not capability: the
+  builder is Python-only by P3's explicit scope, and JavaScript (express),
+  Java (gson), and Go (mux) were never going to be triable regardless of how
+  well the builder works. This is a corpus/builder scope mismatch, not a
+  measurement of what the tool can do. **A README or report may never state
+  the 2.9% figure without this line beside it** — quoting 2.9% alone reads as
+  a capability ceiling it is not.
+
+**Neither number may be quoted without the other and without its
+denominator.** 2.9% is not deleted or softened by 82.6% existing, and 82.6%
+does not excuse 2.9% — they answer different questions and a document that
+states one while implying the other has answered it is misleading regardless
+of which one it picked.
+
+Per stratum:
+
+- **`non_python_source` (77.7%)** — corpus artifact. This number will not
+  move until a language beyond Python exists (`CONTRIBUTING.md`'s "adding a
+  language" section) — see the new roadmap phase below.
+- **`python_file_class_test` (15.5%)** — every one of these is `COMPLETE`,
+  the builder works correctly on them, and **these 16 findings are
+  dataset-eligible.** C1 forbids Stage 1 auto-*resolving* a `TEST`-classified
+  finding without a model or a human; it has never forbidden *adjudicating*
+  one, and the earlier framing here conflated the two. Hardcoded credentials
+  in test fixtures are real credentials — reasoning about them is exactly
+  what an adjudicator is for. Whether all 16, some, or none are *selected*
+  into the dataset is still a D10 labeling decision (representativeness,
+  duplicate rulesets, etc.), but eligibility is settled: they are triable
+  Python findings like any other.
 - **`python_dynamic_dispatch` (3.9%)** — two real findings
   (`flask/cli.py:1023`, `flask/config.py:209`), each reported twice across
   overlapping Semgrep rulesets. Genuine `eval`/`exec` calls, correctly
@@ -800,22 +834,32 @@ criteria.** Each stratum demands a different response, and none of them is
   pending more data before it is stated as a firm claim.
 - **`triable` (2.9%, 3 findings)** — `flask/json/tag.py:188`,
   `flask/sessions.py:281` (flagged by two overlapping rulesets, hence
-  appearing as 3 raw results rather than 2 distinct findings). Three
-  findings is far too few for any dataset regardless of label distribution,
-  and none of the three have a ground-truth label yet — assigning one
-  without the rationale D10 requires would be exactly the shortcut D10
-  exists to prevent.
+  appearing as 3 raw results rather than 2 distinct findings).
 
-**Consequence for D10 and the order of work: this repo corpus cannot supply
-the ≥100-finding dataset.** The public-benchmark, CVE-fix, and
-hand-labeled routes in D10/D13 are not a fallback for a future problem — they
-are the only viable route, starting now. This also sharpens D13's warning
-about a thin private holdout: if OWASP/Juliet supplies the bulk of the count
-under an assumption of contamination, and real-world SARIF supplies next to
-nothing, the CVE-fix and hand-labeled subsets are carrying essentially all of
-the weight behind "the number that counts" — and if those two subsets end up
-small, the README must say the claim rests on a small private holdout, in
-those words, rather than let a headline number stand unqualified.
+**Consequence for D10: this repo corpus cannot supply the ≥100-finding
+dataset from real-world SARIF alone**, at either denominator — 3 is too few
+outright, and even the full 19 adjudicable Python findings falls far short of
+100. The public-benchmark, CVE-fix, and hand-labeled routes in D10/D13 carry
+the count. **Decision: proceed on that basis (P4 kickoff, option 2), without
+expanding language scope now** — a second language is a P7+ item, tracked as
+its own roadmap phase below, because attempting it mid-P4 risks shipping
+neither a dataset nor a second language.
+
+**Addition: the 19 adjudicable Python findings are harvested into the
+dataset as a fourth, distinct provenance class, `REAL_WORLD`** (D10, below).
+Small — nowhere near enough alone — but it is the only subset drawn from
+genuine SARIF against genuine code rather than a synthetic benchmark or a
+hand-selected CVE commit, and it is uncontaminated in the sense D13 cares
+about. Reported separately, never pooled: it is the sanity check on whether
+benchmark performance transfers to real scanner output, which is the
+question a security engineer reading the README actually has. This also
+sharpens D13's warning about a thin private holdout: if `PUBLIC_BENCHMARK`
+carries the bulk of the count under assumed contamination, and `REAL_WORLD`
+tops out near 19, then `CVE_FIX` and `HAND_LABELED` are carrying essentially
+all the weight behind whatever number the README leads with — and if the
+private holdout (`CVE_FIX` + `HAND_LABELED`) lands under 50 findings, the
+report must say so plainly and state what claims that size does and does not
+support, rather than let a headline number stand unqualified.
 
 ### D10 — Dataset inclusion criteria, committed before labeling
 
@@ -840,7 +884,7 @@ edit.
 | `repo` | A pinned commit SHA — never a branch, never "latest" |
 | `ground_truth` | `TRUE_POSITIVE` or `FALSE_POSITIVE` |
 | `rationale` | Written, citing specific code — not "obviously a TP" |
-| `provenance` | One of: `OWASP_BENCHMARK`, `JULIET`, `CVE_FIX`, `HAND_LABELED` |
+| `provenance` | One of: `OWASP_BENCHMARK`, `JULIET`, `CVE_FIX`, `HAND_LABELED`, `REAL_WORLD` |
 | `labeled_by` | Who or what decided it — a person's name, or the CVE/commit that decided it for us |
 
 **Provenance sets the evidentiary bar, not just a tag:**
@@ -857,6 +901,16 @@ edit.
   specific code path, why it is or is not exploitable, and what would change
   the answer. A hand label with no rationale a stranger could audit does not
   meet the bar, full stop.
+- **`REAL_WORLD`** — drawn from the 19 adjudicable findings the P1/P2/P3
+  pipeline itself produced against genuine Semgrep/CodeQL output on the real
+  pinned-commit Flask checkout (see the triability measurement above), not
+  from a curated benchmark or a hand-picked CVE. Each still needs a written
+  `rationale` and a `TRUE_POSITIVE`/`FALSE_POSITIVE` label like every other
+  entry — `REAL_WORLD` describes where the *finding* came from, not an
+  exemption from labeling rigor. Small by construction (≤19) and reported as
+  its own subset, never pooled into the headline count: it exists to answer
+  whether benchmark performance transfers to real scanner output, which none
+  of the other three classes can answer on their own.
 
 **Rejection is measured and reported, not discarded silently.** Every
 candidate finding that was considered and did not make the dataset is counted
@@ -936,14 +990,21 @@ hope against it.
 **Structural response, not a disclaimer:**
 
 - **Report subsets separately, always**: a `public_benchmark` subset
-  (OWASP + Juliet), a `cve_fix` subset, and a `private_hand_labeled` subset.
-  Never a single blended number across all three.
-- **The private hand-labeled subset is the number that counts.** It is drawn
-  from a repository chosen for being unlikely to be memorized — small,
-  low-profile, and ideally including code written or modified after any
-  model's training cutoff. Every headline claim this project makes about
-  accuracy is qualified by which subset it came from, and the private subset
-  is the one the README leads with if the two disagree.
+  (OWASP + Juliet), a `cve_fix` subset, a `hand_labeled` subset, and a
+  `real_world` subset (the `REAL_WORLD`-provenance findings from D10, capped
+  near 19). Never a single blended number across all four.
+- **The private holdout — `cve_fix` + `hand_labeled` combined — is the number
+  that counts.** Drawn from repositories and commits chosen for being
+  unlikely to be memorized — small, low-profile, and ideally including code
+  written or modified after any model's training cutoff. Every headline claim
+  this project makes about accuracy is qualified by which subset it came
+  from, and the private holdout is the one the README leads with if subsets
+  disagree. **If the private holdout lands under 50 findings, the report
+  states that explicitly and states plainly what claims a holdout that size
+  does and does not support** — a thin holdout is publishable; a thin holdout
+  presented as robust is not. `real_world` is reported alongside it as a
+  distinct sanity check (does the picture change against genuine scanner
+  output), never merged into the holdout's own count.
 - **A metric jump on the public subset above a stated threshold — provisionally
   10 percentage points run over run with no corresponding code or prompt
   change — is flagged as probable contamination before it is reported as an

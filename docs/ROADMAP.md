@@ -145,17 +145,26 @@ Zero LLM calls. Nothing tagged.
 
 **Scope notes**
 
-- *The review surfaced the finding that defines P4.* Of 16 real Semgrep Flask
+- *The review surfaced the finding that defines P4 — corrected once, after
+  the first framing conflated two different rules.* Of 16 real Semgrep Flask
   findings, 14 came back `INSUFFICIENT` — 12 because the finding landed in a
   `.html` template or `pyproject.toml` (correctly unparseable as Python, not a
   bug), 2 from a genuine `eval()`/`exec()` on the path. Of 8 CodeQL findings,
-  all 8 were `COMPLETE`, and all 8 were inside Flask's own test files. D6
-  forces `INSUFFICIENT` to `NEEDS_HUMAN_REVIEW`; C1 already forbids dismissing
-  test-file findings. Net effect: the P1/P2 corpus, run through the P3
-  builder, is dominated by findings this tool cannot or should not adjudicate
-  at all. That is D6 and C1 working exactly as designed — and it means the
-  existing corpus cannot evaluate a triage pipeline. P4's dataset must be
-  built from findings that are actually triagable, not reused from P1/P2.
+  all 8 were `COMPLETE`, and all 8 were inside Flask's own test files. The
+  first write-up of this said C1 "forbids dismissing test-file findings" and
+  implied that made them unusable for a dataset — wrong: **C1 forbids Stage 1
+  auto-*resolving* a test-file finding without a model; it never forbade
+  *adjudicating* one.** All 8 CodeQL findings and the 3 non-test Semgrep
+  `COMPLETE` findings are equally dataset-eligible Python findings; only the
+  4 `python_dynamic_dispatch` ones are genuinely unadjudicable. Measured
+  precisely in `docs/ARCHITECTURE.md`: **3/103 (2.9%)** meet the full P1-P4
+  dataset bar on this specific four-language corpus, while **19/23 (82.6%)**
+  of the *Python* findings alone produced adjudicable context — 80/103 are
+  excluded for language (JS/Java/Go), not capability. Both numbers are
+  reported together everywhere from here on; neither is quoted alone. P4's
+  dataset is built from OWASP/Juliet/CVE-fix/hand-labeled material, with
+  those 19 real-world Python findings harvested in as a small, separately
+  reported `REAL_WORLD` provenance class.
 - *A caller-graph and dynamic-dispatch heuristic bug class, found by running
   against real code three separate times*, not by review: a span-budget
   counter shared across the whole bundle instead of scoped to the caller walk
@@ -225,11 +234,42 @@ the architecture.
 - [ ] Markdown PR comment, grouped by verdict, true positives first
 - [ ] README carries **real measured numbers** and a recorded terminal demo
 - [ ] README limitations/findings section includes, verbatim from
-      `docs/ARCHITECTURE.md`: the GitHub-ignores-SARIF-suppressions finding (P1)
-      and the upstream-fingerprint-is-not-automatically-an-identity finding (P2)
-      — both are design principles other people building on SARIF need, not
-      internal trivia
+      `docs/ARCHITECTURE.md`: the GitHub-ignores-SARIF-suppressions finding (P1),
+      the upstream-fingerprint-is-not-automatically-an-identity finding (P2),
+      and the triability numbers from P4 stated as the paired pair they are —
+      **3/103 (2.9%) on the four-language corpus** and **19/23 (82.6%) of
+      Python findings alone**, with the 80/103 language exclusion named
+      explicitly. Never one of the two numbers without the other.
 - [ ] Adversarial review pass over the whole pipeline, findings triaged: every
       path where a real vulnerability could be silently dismissed, plus the
       threat model in `SECURITY.md`
 - [ ] CHANGELOG complete, repo flipped public, **v0.1.0** tagged from a green `main`
+
+---
+
+## ☐ P7+ — Corpus/builder language parity (not scheduled)
+
+Named here so it is not lost, not because it is next. Deliberately deferred
+past P4-P6 per the P4 kickoff decision: attempting it mid-P4 risks shipping
+neither a dataset nor a second language.
+
+**The problem it addresses:** the fixture corpus is deliberately four
+languages (Python, JavaScript, Java, Go) so the round-trip and pre-filter
+tests in P1/P2 exercise more than one tool's SARIF shape. The context builder
+is Python-only by P3's explicit scope. The gap between those two choices is
+what produces the 77.7% `non_python_source` stratum measured in P4 — a
+corpus/builder mismatch, not a capability finding, but one that will recur
+for any future real-world dataset expansion until it is closed.
+
+**Acceptance criteria, sketched, not committed:**
+
+- [ ] Either the corpus gains a Python-only real-world source (a fifth
+      pinned target repo), or the builder gains a second language
+      (`CONTRIBUTING.md`'s "adding a language" section already specifies the
+      per-language checklist: grammar, queries, fixture per query, `FileClass`
+      heuristics, entrypoint detection, eval coverage)
+- [ ] Whichever direction is chosen, re-run `evals/measure_triability.py`
+      afterward and report the new stratification — the 2.9%/82.6% pair from
+      P4 becomes the baseline this phase is measured against
+- [ ] A language is not "supported" until it has eval coverage, per
+      `CONTRIBUTING.md` — this phase does not close until that is true
