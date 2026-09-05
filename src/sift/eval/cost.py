@@ -13,16 +13,19 @@ from enum import StrEnum
 class ModelId(StrEnum):
     """Model policy per CONTRIBUTING.md. Haiku for the analysts, Opus for the
     Adjudicator — the Adjudicator is never downgraded to save money, and
-    nothing in this module is capable of picking a cheaper model for it."""
+    nothing in this module is capable of picking a cheaper model for it.
 
-    HAIKU = "claude-haiku-4-5"
-    OPUS = "claude-opus-5"
+    Values are gateway model slugs (`vendor/model`); the gateway itself is
+    named only in `sift.llm.provider`, never here."""
+
+    HAIKU = "anthropic/claude-haiku-4-5"
+    OPUS = "anthropic/claude-opus-5"
 
 
 @dataclass(frozen=True)
 class Pricing:
     """USD per million tokens. Cache read/write are multipliers on the input
-    rate, not separate published figures — that is how Anthropic prices it."""
+    rate, matching the gateway's published cache price list."""
 
     input_per_mtok: float
     output_per_mtok: float
@@ -31,9 +34,13 @@ class Pricing:
     cache_read_multiplier: float = 0.10
 
 
-#: Sourced from the claude-api skill's pricing table, cached 2026-06-24.
-#: Verify against console.anthropic.com before trusting this for a real spend
-#: decision — prices change, and this table does not self-update.
+#: The gateway's published per-provider rates for the pinned upstream
+#: ("anthropic"), read off the gateway's model pages on 2026-09-05:
+#: anthropic/claude-haiku-4-5 at $1.00/$5.00, anthropic/claude-opus-5 at
+#: $5.00/$25.00 per M input/output; cache read 0.1x and cache write 1.25x on
+#: both, which is what the multipliers below encode. Verify against the
+#: gateway before trusting this for a real spend decision — prices change,
+#: and this table does not self-update.
 PRICING: dict[ModelId, Pricing] = {
     ModelId.HAIKU: Pricing(input_per_mtok=1.00, output_per_mtok=5.00),
     ModelId.OPUS: Pricing(input_per_mtok=5.00, output_per_mtok=25.00),
@@ -44,11 +51,11 @@ def estimate_tokens(text: str) -> int:
     """A cheap, offline token estimate: ~4 characters per token for English
     prose and code. This is a heuristic, not a measurement.
 
-    The real count is `client.messages.count_tokens` (Anthropic API skill:
-    "use messages.count_tokens, never tiktoken") — but that call needs a live
-    API key and network access, which `--dry-run` must not require. This
+    The real count comes from the gateway response's `usage` block (see
+    `sift.llm.provider.ProviderResponse`) — but that needs a live API key and
+    network access, which `--dry-run` must not require. This
     heuristic is the offline fallback that keeps `--dry-run` truly free; once
-    `SIFT_API_KEY` is set (P4 step 5), the real run may call `count_tokens`
+    `SIFT_API_KEY` is set (P4 step 5), the real run records `usage` totals
     for its own bookkeeping without contradicting this function's purpose.
     """
     return max(1, len(text) // 4)
