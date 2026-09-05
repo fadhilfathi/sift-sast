@@ -181,27 +181,48 @@ Zero LLM calls. Nothing tagged.
 
 ---
 
-## ☐ P4 — Eval harness and labeled dataset, then a naive baseline
+## P4 - Eval harness and labeled dataset, then a naive baseline (in progress)
 
 Built **before** the agents, on purpose.
 
+**Status: infrastructure complete, live baseline UNRUN by user choice.**
+Steps 1-4 (harness, dataset, provider adapter, scoring) are done, reviewed,
+and merged; step 5's runner and prompt are built and validated offline, but
+no model was ever called - see `evals/reports/p4-pilot.md`. Every scored
+metric (precision, recall, false suppression rate, injection resistance,
+cost, p95 latency) is **not yet measured**. D12's baseline bar does not
+exist yet, and no architectural claim may lean on it.
+
 **Acceptance criteria**
 
-- [ ] `evals/dataset/` holds **≥ 100 labeled findings, class balanced**, seeded from
-      OWASP Benchmark, the Juliet Test Suite, and real CVE-fix commits
-- [ ] Each entry: finding + repo snapshot + ground truth label + rationale
-- [ ] A dedicated **prompt-injection test class** with its own metric
-- [ ] Metrics: precision, recall, **false suppression rate** (first), injection
-      resistance, cost per finding, p95 latency
-- [ ] Every report records model IDs, temperature, and prompt hashes
-- [ ] `--dry-run` prints estimated cost and call count and spends nothing
-- [ ] Hard abort at **$5.00 per run**, checked before each call
-- [ ] Content-hash cache so re-running on unchanged findings costs near zero
-- [ ] `make eval` is reproducible and writes `evals/REPORT.md`, committed
+- [x] `evals/dataset/` holds **100+ labeled findings, class balanced**, seeded from
+      OWASP Benchmark, the Juliet Test Suite, and real CVE-fix commits -
+      **103 findings, 45 TP / 58 FP, but the seeding is narrower than
+      specified:** 84 `HAND_LABELED` synthetic + 19 `REAL_WORLD` (Flask alone).
+      `OWASP_BENCHMARK`/`JULIET` are empty (Python-only builder, no honest
+      Python surface to label) and `CVE_FIX` is empty (no offline-verifiable
+      fix SHA). Any eventual step-5 run is a **pilot baseline**, not the D12
+      baseline in full, until those classes are filled.
+- [x] Each entry: finding + repo snapshot + ground truth label + rationale
+- [x] A dedicated **prompt-injection test class** with its own metric -
+      built and separately scored in code, never pooled; unmeasured like the rest
+- [x] Metrics: precision, recall, **false suppression rate** (first), injection
+      resistance, cost per finding, p95 latency - **computed in
+      `sift.eval.scoring`, covered by 30 tests, never run against model output**
+- [x] Every report records model IDs, temperature, and prompt hashes
+- [x] `--dry-run` prints estimated cost and call count and spends nothing -
+      **$2.5750 for 103 findings, under the $5 cap, confirmed twice**
+- [x] Hard abort at **$5.00 per run**, checked before each call -
+      proven by a `--limit 2` smoke test reaching clean 402-before-billing
+- [ ] Content-hash cache so re-running on unchanged findings costs near zero -
+      specified in P1, deferred to P5's orchestrator as designed
+- [ ] `make eval` is reproducible and writes `evals/REPORT.md`, committed -
+      blocked on the live run; `evals/reports/p4-pilot.md` stands in its place
 - [ ] A deliberately naive **single-prompt baseline**, scored. **That number is the
-      bar the multi-agent design must clear.**
+      bar the multi-agent design must clear.** - prompt and runner built and
+      genuine; **scoring never ran, the bar does not exist yet**
 
-**Done means:** we can measure. Until then no architectural claim is admissible.
+**Done means:** we can measure. The measuring has not happened.
 
 ---
 
