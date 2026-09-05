@@ -27,6 +27,7 @@ htmlcov/
 .sift-cache/
 evals/runs/
 !evals/runs/.gitkeep
+evals/pilot/runs/
 
 # Local working notes and editor/agent tooling config. Not part of the project.
 CLAUDE.md
