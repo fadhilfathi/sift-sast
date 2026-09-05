@@ -1,0 +1,9 @@
+{"rule_id":"python.lang.security.audit.eval-detected.eval-detected","path":"src/flask/cli.py","line":1023,"reason":"INSUFFICIENT completeness (dynamic-dispatch: eval on path); D10 admits COMPLETE/PARTIAL only"}
+{"rule_id":"python.lang.security.audit.eval-detected.eval-detected","path":"src/flask/cli.py","line":1023,"reason":"duplicate: same sink re-reported by the p/security-audit ruleset run; kept once as rejected, never admitted"}
+{"rule_id":"python.lang.security.audit.exec-detected.exec-detected","path":"src/flask/config.py","line":209,"reason":"INSUFFICIENT completeness (dynamic-dispatch: exec on path); D10 admits COMPLETE/PARTIAL only"}
+{"rule_id":"python.lang.security.audit.exec-detected.exec-detected","path":"src/flask/config.py","line":209,"reason":"duplicate: same sink re-reported by the p/security-audit ruleset run; kept once as rejected, never admitted"}
+{"rule_id":"*","path":"expressjs/express examples/** (55 results)","line":1,"reason":"non_python_source: builder is Python-only by P3 scope; 55 findings aggregated"}
+{"rule_id":"*","path":"gorilla/mux/** (11 results)","line":1,"reason":"non_python_source: builder is Python-only by P3 scope; 11 findings aggregated"}
+{"rule_id":"*","path":"google/gson/** (2 results)","line":1,"reason":"non_python_source: builder is Python-only by P3 scope; 2 findings aggregated"}
+{"rule_id":"*","path":"pallets/flask non-Python files (12 results: .html templates, pyproject.toml)","line":1,"reason":"non_python_source: correctly unparseable as Python, not a builder failure; 12 findings aggregated"}
+{"rule_id":"sift-synth/audit-eval-detected","path":"snapshots/synth-v1 (not authored)","line":1,"reason":"INSUFFICIENT by design: eval/exec/getattr as sink forces dynamic-dispatch; class covered by rejected-by-rule, not by entries"}

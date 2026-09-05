@@ -67,7 +67,10 @@ src = ["src", "tests"]
 # lint debt. python_project's line numbers are additionally load-bearing for
 # tests (auto-fixing an import order once already shifted every hardcoded
 # line number in test_context_builder.py), so it must never be auto-formatted.
-extend-exclude = ["*.md", "tests/fixtures/python/**", "tests/fixtures/python_project/**"]
+# evals/dataset/snapshots holds the same kind of synthetic source for the P4
+# eval dataset (finding lines are stamped into dataset.jsonl by build.py),
+# so it must never be reformatted either.
+extend-exclude = ["*.md", "tests/fixtures/python/**", "tests/fixtures/python_project/**", "evals/dataset/snapshots/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "PTH", "RUF", "S"]
@@ -76,6 +79,9 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "B011"]
 "evals/**" = ["S"]
+# build.py's long lines are data (embedded snapshot source and rationales),
+# not code that can be reflowed without changing the generated dataset.
+"evals/dataset/build.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -83,7 +89,7 @@ strict = true
 files = ["src", "tests", "evals"]
 # Same reason as the ruff extend-exclude above: synthetic tree-sitter fixtures,
 # never imported, never meant to type-check.
-exclude = ["tests/fixtures/python/", "tests/fixtures/python_project/"]
+exclude = ["tests/fixtures/python/", "tests/fixtures/python_project/", "evals/dataset/snapshots/"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 disallow_any_explicit = false
