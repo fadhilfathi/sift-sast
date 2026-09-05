@@ -143,6 +143,7 @@ def render_report_markdown(report: EvalReport) -> str:
         "",
         f"- Adjudicator model: `{report.config.adjudicator_model.value}`",
         f"- Baseline model: `{report.config.baseline_model.value}`",
+        f"- Upstream provider (pinned): `{report.config.upstream_provider}`",
         f"- Temperature: {report.config.temperature}",
         f"- Prompt hashes: {report.config.prompt_hashes or '_none yet - no prompt exists_'}",
         f"- Dataset: `{report.config.dataset_path}`"

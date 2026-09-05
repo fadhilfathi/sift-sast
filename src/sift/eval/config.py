@@ -71,6 +71,11 @@ class EvalConfig(BaseModel):
         description="What the P4 single-prompt baseline itself calls.",
     )
     temperature: float = Field(ge=0.0, le=1.0)
+    upstream_provider: str = Field(
+        default="anthropic",
+        description="Pinned upstream serving every request (gateway routing pin). "
+        "A metric move at an unchanged value is reasoning; at a changed value, suspect routing.",
+    )
     prompt_hashes: dict[str, str] = Field(default_factory=dict)
     dataset_path: str
     corpus_sha: str | None = Field(
