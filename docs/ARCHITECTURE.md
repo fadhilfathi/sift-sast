@@ -920,6 +920,25 @@ number about how much of a real repository's findings this tool can currently
 reason about at all* — it is reported in `evals/REPORT.md` with the same
 visibility as precision and recall, not buried in a dataset-construction note.
 
+**P4 finding: synthetic labels leak into model-visible context by default.**
+Measured three times in review before the dataset passed: inline `# finding:
+TP/FP` comments, `tp_`/`fp_` function names, and a docstring announcing the
+TP/FP pair, all inside the untrusted block (proven by running the real
+context builder on `tls_verify_false.py:5` and reading
+`def tp_post(...): ... # finding: TP` back as model-visible text); after that
+fix, `alpha_` was TP in 42/42 files (name alone a perfect oracle); after that
+fix, 27 of 42 synth pairs carried different rule_ids per twin with
+mitigation-named FP sides (22/58 FP entries leaked via rule name alone). Each
+round closed the named channel but not the invariant - name and rule_id must
+correlate with something other than ground truth - and each round was caught
+only because review rendered the actual model-visible text rather than reading
+the builder's intent. Rule for future dataset work: assert the invariant, not
+the channel. `tests/test_no_llm.py` now encodes exactly this - no marker
+comments or `tp_`/`fp_` names in written snapshots, twins sharing one
+rule_id, and `alpha_` TP in roughly half the files, not all of them. The
+general lesson: when hand-constructing eval data, the label is guilty until
+proven innocent of every field the model can see.
+
 ### D11 — Completeness-stratified metrics, always
 
 > **Decision D11**, settled before P4 implementation.
