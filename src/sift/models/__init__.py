@@ -28,8 +28,12 @@ from sift.models.context import (
 from sift.models.sarif import Result, Run, SarifLog, Suppression
 from sift.models.verdict import (
     Adjudication,
+    AdversaryOutput,
+    AdversaryPosition,
     AgentArgument,
     AgentRole,
+    AnalystOutput,
+    FiledObjection,
     FileLineRef,
     Objection,
     TriageResult,
@@ -38,8 +42,11 @@ from sift.models.verdict import (
 
 __all__ = [
     "Adjudication",
+    "AdversaryOutput",
+    "AdversaryPosition",
     "AgentArgument",
     "AgentRole",
+    "AnalystOutput",
     "CallSite",
     "CallerSearch",
     "CodeSpan",
@@ -50,6 +57,7 @@ __all__ = [
     "EntrypointKind",
     "FileClass",
     "FileLineRef",
+    "FiledObjection",
     "FlowStep",
     "Objection",
     "Reachability",

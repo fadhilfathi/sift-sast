@@ -67,8 +67,67 @@ class Objection(BaseModel):
         return self
 
 
+class AnalystOutput(BaseModel):
+    """The parsed response schema for Reachability and Exploitability.
+
+    No `objections` field. Filing an objection against a dismissal is the
+    Adversary's job — closing the field here at the schema level means an
+    analyst cannot emit one for the Adjudicator to find and mistake for the
+    real thing; the shape itself forbids it rather than a prompt asking
+    nicely.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    position: Verdict
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: str = Field(max_length=3000)
+    evidence_lines: list[FileLineRef] = Field(default_factory=list)
+    unresolved_questions: list[str] = Field(default_factory=list)
+
+
+class AdversaryPosition(StrEnum):
+    """The Adversary's own position space. `FALSE_POSITIVE` is structurally
+    absent — the prosecution does not get to conclude the defense's case."""
+
+    TRUE_POSITIVE = "TRUE_POSITIVE"
+    NEEDS_HUMAN_REVIEW = "NEEDS_HUMAN_REVIEW"
+
+
+class FiledObjection(BaseModel):
+    """An objection as the Adversary files it.
+
+    No `rebutted` or `rebuttal` field. Those are the Adjudicator's fields to
+    set, not the prosecution's — letting the Adversary pre-populate its own
+    objection as resolved would let a model quietly mark its own case closed.
+    The orchestrator attaches `rebutted=False, rebuttal=None` at handoff; the
+    Adjudicator's output is what actually decides them.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    claim: str = Field(max_length=500)
+    evidence: list[FileLineRef] = Field(default_factory=list)
+
+
+class AdversaryOutput(BaseModel):
+    """The parsed response schema for the Adversary."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    position: AdversaryPosition
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: str = Field(max_length=3000)
+    evidence_lines: list[FileLineRef] = Field(default_factory=list)
+    objections: list[FiledObjection] = Field(default_factory=list)
+    unresolved_questions: list[str] = Field(default_factory=list)
+
+
 class AgentArgument(BaseModel):
-    """One analyst's position. The Adjudicator sees these with `role` stripped."""
+    """One analyst's position, as stored for the audit trail. The Adjudicator
+    sees the raw `AnalystOutput`/`AdversaryOutput` forms with `role` never
+    present at all, not this stored shape with `role` stripped after the
+    fact."""
 
     role: AgentRole
     position: Verdict
@@ -99,10 +158,20 @@ class Adjudication(BaseModel):
         default=None, description="Set when the safety rule overrode the model's verdict."
     )
     downgrade_reason: str | None = None
+    adversary_objection_count: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "How many objections the Adversary filed, before any rebuttal. Zero blocks "
+            "FALSE_POSITIVE regardless of confidence — see enforce_safety_rule. The safe "
+            "default is zero: a caller must affirmatively report that the Adversary looked."
+        ),
+    )
 
     @model_validator(mode="after")
     def enforce_safety_rule(self) -> Self:
-        """A dismissal must clear the confidence floor and answer every objection.
+        """A dismissal must clear the confidence floor, answer every objection, and
+        have had a real prosecution run against it in the first place.
 
         Runs on assignment too, so a later edit cannot sneak a weak dismissal through.
         """
@@ -114,6 +183,8 @@ class Adjudication(BaseModel):
             reasons.append(f"confidence {self.confidence:.2f} < {FALSE_POSITIVE_CONFIDENCE_FLOOR}")
         if unrebutted := [o for o in self.open_objections if not o.rebutted]:
             reasons.append(f"{len(unrebutted)} unrebutted adversary objection(s)")
+        if self.adversary_objection_count == 0:
+            reasons.append("adversary filed zero objections")
         if not reasons:
             return self
 

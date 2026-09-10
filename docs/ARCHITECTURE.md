@@ -361,9 +361,51 @@ The first three run concurrently on a shared, prompt-cached context prefix.
 ### The safety rule
 
 `FALSE_POSITIVE` requires `confidence >= 0.85` **and** no unrebutted Adversary
-objection. Otherwise the verdict becomes `NEEDS_HUMAN_REVIEW`, with
+objection **and** the Adversary having filed at least one objection in the
+first place. Otherwise the verdict becomes `NEEDS_HUMAN_REVIEW`, with
 `downgraded_from` and `downgrade_reason` recorded. Enforced in the schema, not in
-prompt text, so no model output can bypass it.
+prompt text, so no model output can bypass it. `Adjudication.adversary_objection_count`
+is the field this last condition reads; it defaults to zero, so a caller that
+forgets to report it gets the safe outcome rather than an accidental pass.
+
+### The Adversary's `position` is not its signal — `objections` is
+
+By design, the Adversary's `position` field will skew close to 100%
+`TRUE_POSITIVE` across a real run. That is not a bug to notice and fix later:
+its prompt (`prompts/adversary.txt`) explicitly forbids concluding
+`FALSE_POSITIVE` at all, and instructs it to prosecute whenever it can
+construct any credible attack path, however narrow. A future reader who sees
+this skew and "corrects" the Adversary toward balance would be quietly
+removing the safety rule's second condition — see D12's sibling concern
+above about tuning an eval until the numbers look good; this is the same
+mistake applied to a prompt instead of a dataset.
+
+The real signal is in `objections`: how many were filed, and how specific
+and well-evidenced each one is. The Adjudicator is instructed
+(`prompts/adjudicator.txt`) to weigh the Adversary's output this way — as a
+prosecution to be individually rebutted with cited code, not as a vote to be
+averaged against the other two analysts' positions. `adversary_objection_count
+== 0` blocking `FALSE_POSITIVE` structurally, above, is this same principle
+enforced in code: an Adversary that looked and found nothing to file is
+meaningfully different from one that was never made to look hard enough to
+find anything, and the schema treats the absence of any filed objection as
+the latter until proven otherwise, rather than reading silence as a clean
+bill of health.
+
+### `confidence` is not the same measurement across agents
+
+Reachability and Exploitability's `confidence` is belief-in-conclusion — how
+sure the analyst is that its own narrow verdict is correct. The Adversary's
+`confidence` is prosecution-strength — how strong the case it built is, not
+how sympathetic it is to a dismissal; a low-confidence `TRUE_POSITIVE` from
+the Adversary is still a filed case, never a shrug toward the defense (see
+`prompts/adversary.txt`, POSITION AND CONFIDENCE). These are deliberately
+different quantities wearing the same field name across `AnalystOutput` and
+`AdversaryOutput`. **Nothing downstream may average, sum, or otherwise
+directly compare confidence values across agents** — doing so would silently
+average a belief against a prosecution-strength score and produce a number
+with no defensible meaning. The Adjudicator reads each agent's confidence
+only in the context of that agent's own role, never against the others'.
 
 ## Stage 4 — emitters
 
