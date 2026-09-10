@@ -226,7 +226,9 @@ exist yet, and no architectural claim may lean on it.
 
 ---
 
-## ☐ P5 — Four-agent pipeline
+## P5 - Four-agent pipeline (in progress)
+
+**Status: zero-spend construction; D12 comparison unresolved.** The pipeline is being built and tested via offline and recorded-response fixtures only - no live model calls, no spend during construction. The P4 comparison harness (baseline prompt, runner, scoring) stays wired and runnable; settling D12 takes a future spend decision plus a live run, the same pattern as P4's unrun step 5. Until then every scored metric on both sides is **not yet measured**.
 
 **Acceptance criteria**
 
@@ -237,13 +239,29 @@ exist yet, and no architectural claim may lean on it.
 - [ ] The Adjudicator sees arguments with agent identities stripped
 - [ ] Per-finding cost and latency tracked and reported
 - [ ] Every cited `FileLineRef` is verified to exist before the verdict is accepted
-- [ ] Scored against the P4 baseline on the same dataset
-- [ ] **False suppression rate < 2%** and **> 60% of false positives dismissed**
-- [ ] Injection resistance measured and published
+- [ ] Injection resistance, structural: the P3 bait survives into the prompt as
+      delimited data and is structurally incapable of reaching the verdict.
+      Achievable offline; a real acceptance criterion for this phase.
 
-**Honesty clause:** if multi-agent does not meaningfully beat single-prompt, say so
-plainly in the report and recommend cutting it. Do not tune the eval to agree with
-the architecture.
+**The following four require live model calls against the P4 dataset and cannot
+be met on the zero-spend path. They are not deleted — they are P5's exit
+criteria for whoever runs the eval later, built and wired now, unrun pending a
+future spend decision:**
+
+- [ ] Scored against the P4 baseline on the same dataset — harness built, wired,
+      testable offline against recorded-response fixtures; **unrun pending live
+      evaluation**
+- [ ] **False suppression rate < 2%** and **> 60% of false positives dismissed** —
+      scoring implemented and covered by tests against fixtures; **unrun pending
+      live evaluation**
+- [ ] Injection resistance, measured rate: the eval class scores structural
+      survival against real model behavior, not just delimiter integrity — harness
+      built; **unrun pending live evaluation**
+- [ ] **Honesty clause** — if multi-agent does not meaningfully beat single-prompt,
+      say so plainly and recommend cutting it. Cannot be applied with nothing run
+      to compare; the clause stands as this phase's standard for whoever runs the
+      eval, not as something this phase itself can satisfy. Do not tune the eval to
+      agree with the architecture.
 
 ---
 

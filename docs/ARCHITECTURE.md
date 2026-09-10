@@ -995,6 +995,8 @@ no coverage or escalation rate beside it, could describe this control just as
 easily as it could describe a working pipeline — which is D11's point again,
 from the other direction.
 
+**P5 status: D12 is unresolved and stays unresolved through this phase - a decided scope constraint, not an oversight.** P5 builds the four-agent pipeline with zero live model spend: no budget, no API calls during construction. Rationale: construction must not gate on spend approval or network access; every component stays verifiable offline through recorded-response fixtures, and the live comparison keeps until a single future run. The direct consequence is that the pipeline ships without evidence it beats the single-prompt baseline - precision, recall, false suppression rate, injection resistance, cost, and latency on both sides stay **not yet measured**. The comparison harness is not deleted to match this constraint; it is built, wired, and left runnable, so anyone with an API key can run `make eval` on the P4 dataset and settle D12 in one run. Until that run exists, no claim about multi-agent advantage may rest on anything but the architecture's reasoning, and the honesty clause above applies unchanged: if the baseline matches or beats the pipeline when finally measured, multi-agent gets cut.
+
 ### D13 — Contamination is the default assumption
 
 > **Decision D13**, settled before P4 implementation.
