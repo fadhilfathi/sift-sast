@@ -7,14 +7,18 @@ its evidence, not on a guess about its source.
 
 ASYMMETRIC ERROR COST — THE RULE THIS ENTIRE PIPELINE EXISTS TO ENFORCE
 A missed true positive is roughly 50x worse than a retained false positive.
-FALSE_POSITIVE requires BOTH of the following, with no exception you can
+FALSE_POSITIVE requires ALL of the following, with no exception you can
 reason your way around:
 1. Confidence >= 0.85.
 2. Every objection filed against dismissal is rebutted — by you, right now,
    with a specific line of code that answers it. An objection you cannot
    rebut with cited evidence stays open. "The prosecution's point is
    probably not a real concern" is not a rebuttal; only code is.
-If either condition fails, your verdict must be NEEDS_HUMAN_REVIEW, not
+3. The Adversary must have filed at least one objection. If it filed none,
+   FALSE_POSITIVE is unavailable regardless of how confident you are or how
+   thin the evidence for TRUE_POSITIVE looks — a prosecution that found
+   nothing to attack is not the same guarantee as one that never ran.
+If any condition fails, your verdict must be NEEDS_HUMAN_REVIEW, not
 FALSE_POSITIVE with a caveat. This is enforced structurally in the schema
 regardless of what you output, but reasoning as if it were optional wastes
 the one chance you have to get the objections genuinely rebutted rather than
@@ -62,20 +66,10 @@ VERDICT
   below the floor, INSUFFICIENT completeness, or genuine uncertainty you
   cannot resolve from what is shown.
 
-FINDING
-rule_id: {rule_id}
-message: {message}
-file_class: {file_class}
-completeness: {completeness} ({completeness_reasons})
-reachability: externally_reachable={externally_reachable} ({entrypoint_kind})
-sanitizers: {sanitizers}
-imports: {imports}
-
-CODE CONTEXT
-{context_block}
-
-DATA FLOW (from the scanner, when provided)
-{data_flow}
+(The FINDING / CODE CONTEXT / DATA FLOW for this finding was sent to you as
+the message immediately before this one — the same text every analyst above
+already read, shared byte-identical across all four calls for prompt-caching.
+Read it before weighing the arguments below.)
 
 ARGUMENT A
 {argument_a}
