@@ -79,6 +79,51 @@ def test_request_pins_model_provider_order_and_temperature(
     assert sent["provider"] == {"order": ["anthropic"], "allow_fallbacks": False}
 
 
+def test_plain_message_content_is_a_string(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[urllib.request.Request] = []
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_open(_ok_body(), seen))
+    complete(_config(), [ChatMessage(role="user", content="hi")])
+    sent = _sent_json(seen[0])
+    messages = sent["messages"]
+    assert isinstance(messages, list)
+    assert messages[0] == {"role": "user", "content": "hi"}
+
+
+def test_cacheable_message_becomes_a_cache_control_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P5's shared context prefix - see sift.agents.shared_context - is sent
+    with `cacheable=True` so the gateway marks it as a cache breakpoint."""
+    seen: list[urllib.request.Request] = []
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_open(_ok_body(), seen))
+    complete(_config(), [ChatMessage(role="user", content="shared context", cacheable=True)])
+    sent = _sent_json(seen[0])
+    messages = sent["messages"]
+    assert isinstance(messages, list)
+    assert messages[0] == {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "shared context", "cache_control": {"type": "ephemeral"}}
+        ],
+    }
+
+
+def test_only_the_cacheable_message_gets_a_content_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A mixed request - shared prefix cached, role-specific instructions not
+    - must not accidentally cache the varying part too."""
+    seen: list[urllib.request.Request] = []
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_open(_ok_body(), seen))
+    complete(
+        _config(),
+        [
+            ChatMessage(role="user", content="shared", cacheable=True),
+            ChatMessage(role="user", content="instructions"),
+        ],
+    )
+    messages = _sent_json(seen[0])["messages"]
+    assert isinstance(messages, list)
+    assert isinstance(messages[0]["content"], list)
+    assert messages[1] == {"role": "user", "content": "instructions"}
+
+
 def test_auth_header_carries_the_key_and_body_does_not(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

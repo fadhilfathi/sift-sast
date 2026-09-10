@@ -78,21 +78,10 @@ safety. `confidence` reflects how strong your prosecution is, not how
 sympathetic you are to a dismissal — a low-confidence TRUE_POSITIVE is still
 a real, filed case, not a shrug.
 
-FINDING
-rule_id: {rule_id}
-message: {message}
-file_class: {file_class}
-completeness: {completeness} ({completeness_reasons})
-reachability: externally_reachable={externally_reachable} ({entrypoint_kind})
-caller_search: refused={caller_search_refused} truncated={caller_search_truncated} direct_caller_count={direct_caller_count}
-sanitizers: {sanitizers}
-imports: {imports}
-
-CODE CONTEXT
-{context_block}
-
-DATA FLOW (from the scanner, when provided)
-{data_flow}
+(The FINDING / CODE CONTEXT / DATA FLOW for this finding was sent to you as
+the message immediately before this one — it is shared, byte-identical,
+across all three analysts and the Adjudicator for prompt-caching, so it is
+not repeated here. Read it before answering.)
 
 OUTPUT — reply with exactly one JSON object, no prose before or after:
 {{

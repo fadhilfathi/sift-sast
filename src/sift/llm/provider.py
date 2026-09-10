@@ -89,12 +89,20 @@ class ProviderConfig:
 
 
 class ChatMessage(BaseModel):
-    """One OpenAI-compatible chat message. Content is the caller's prompt text."""
+    """One OpenAI-compatible chat message. Content is the caller's prompt text.
+
+    `cacheable=True` marks this message as an Anthropic prompt-caching
+    breakpoint (`cache_control: {"type": "ephemeral"}` on its content block).
+    Use it on a prefix that is sent byte-identical across multiple calls in
+    the same run — see `sift.agents.shared_context` — never on content that
+    varies per call, which would pay the cache-write premium for no reuse.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     role: str
     content: str
+    cacheable: bool = False
 
 
 class ProviderResponse(BaseModel):
@@ -110,10 +118,28 @@ class ProviderResponse(BaseModel):
     cost_usd: float = Field(ge=0.0)
 
 
+def _serialize_message(message: ChatMessage) -> dict[str, object]:
+    """Plain string content normally; a single cache-marked block when the
+    caller opted this message into prompt caching (see `ChatMessage.cacheable`).
+    """
+    if not message.cacheable:
+        return {"role": message.role, "content": message.content}
+    return {
+        "role": message.role,
+        "content": [
+            {
+                "type": "text",
+                "text": message.content,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+    }
+
+
 def _request_body(config: ProviderConfig, messages: list[ChatMessage]) -> dict[str, object]:
     return {
         "model": config.model,
-        "messages": [m.model_dump() for m in messages],
+        "messages": [_serialize_message(m) for m in messages],
         "temperature": config.temperature,
         # Pinned routing: serve only from these upstream providers, in order,
         # with no silent fallback. A routing change must be a config change
