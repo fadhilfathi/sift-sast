@@ -14,6 +14,11 @@ def make(**kw: object) -> Adjudication:
         "verdict": Verdict.FALSE_POSITIVE,
         "confidence": 0.99,
         "justification": "input is a compile-time constant at config.py:12",
+        # The Adversary looked and filed at least one objection. Every test
+        # below that expects a dismissal to stand must earn this explicitly;
+        # the field's own default (0) is what test_zero_adversary_objections_*
+        # exercises directly.
+        "adversary_objection_count": 1,
     }
     return Adjudication.model_validate(base | kw)
 
@@ -47,6 +52,24 @@ def test_rebutted_objection_does_not_block() -> None:
         ]
     )
     assert adj.verdict is Verdict.FALSE_POSITIVE
+
+
+def test_zero_adversary_objections_blocks_dismissal_at_any_confidence() -> None:
+    """An Adversary that filed nothing is not the same as one that looked and
+    found nothing to rebut. Confidence alone must never be enough."""
+    adj = make(confidence=1.0, adversary_objection_count=0)
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert adj.downgraded_from is Verdict.FALSE_POSITIVE
+    assert "zero objections" in (adj.downgrade_reason or "")
+
+
+def test_adversary_objection_count_defaults_to_the_safe_zero() -> None:
+    """A caller that forgets to report the count gets blocked, not a free pass."""
+    adj = make()
+    del_kw = {k: v for k, v in adj.model_dump().items() if k != "adversary_objection_count"}
+    adj2 = Adjudication.model_validate(del_kw | {"verdict": Verdict.FALSE_POSITIVE})
+    assert adj2.adversary_objection_count == 0
+    assert adj2.verdict is Verdict.NEEDS_HUMAN_REVIEW
 
 
 def test_true_positive_never_downgraded() -> None:
