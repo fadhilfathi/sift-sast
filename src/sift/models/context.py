@@ -12,6 +12,13 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# ContextCompleteness lives in verdict.py, re-exported here: Adjudication
+# (verdict.py) needs it too, and verdict.py cannot import context.py without
+# a cycle, since context.py already imports FileLineRef from verdict.py.
+# The `as ContextCompleteness` is mypy's explicit-reexport idiom, required
+# under strict mode - a plain import here is otherwise invisible to a caller
+# importing this name from this module.
+from sift.models.verdict import ContextCompleteness as ContextCompleteness
 from sift.models.verdict import FileLineRef
 
 
@@ -162,19 +169,6 @@ class CompletenessReason(StrEnum):
     UNRESOLVED_IMPORT = "unresolved-import"
     PATH_TRAVERSAL_REFUSED = "path-traversal-refused"
     FILE_UNREADABLE = "file-unreadable"
-
-
-class ContextCompleteness(StrEnum):
-    """How much of the intended context was actually retrieved.
-
-    Not an absence signal buried in a warning list. Decision D6 specifies that
-    P5's ``Adjudication`` carries this value and that ``INSUFFICIENT`` blocks a
-    FALSE_POSITIVE verdict on the same footing as the confidence floor.
-    """
-
-    COMPLETE = "COMPLETE"
-    PARTIAL = "PARTIAL"
-    INSUFFICIENT = "INSUFFICIENT"
 
 
 #: Reasons that, alone, mean the tool cannot rule out the dangerous

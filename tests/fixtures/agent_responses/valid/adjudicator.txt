@@ -1,0 +1,1 @@
+{"verdict": "TRUE_POSITIVE", "confidence": 0.9, "justification": "input reaches the sink at src/app.py:1 with no confirmed mitigation", "evidence_lines": [{"path": "src/app.py", "line": 1}], "unresolved_questions": [], "open_objections": []}

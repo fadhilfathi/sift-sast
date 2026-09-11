@@ -1,0 +1,1 @@
+{"position": "NEEDS_HUMAN_REVIEW", "confidence": 0.3, "reasoning": "could not construct a credible attack path from what is shown", "evidence_lines": [], "objections": [], "unresolved_questions": ["what does the sanitizer actually do"]}

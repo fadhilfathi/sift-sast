@@ -1,0 +1,1 @@
+{"position": "FALSE_POSITIVE", "confidence": 0.6, "reasoning": "on reflection this looks safe", "evidence_lines": [], "objections": [], "unresolved_questions": []}

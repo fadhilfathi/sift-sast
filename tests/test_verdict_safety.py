@@ -5,26 +5,120 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from sift.models import Adjudication, FileLineRef, Objection, Verdict
+from sift.models import Adjudication, ContextCompleteness, FileLineRef, Objection, Verdict
 
 
 def make(**kw: object) -> Adjudication:
+    """Every blocking condition satisfied by default - so each test below can
+    break exactly one and prove it, alone, forces the downgrade. A test that
+    starts from two broken conditions proves nothing about either."""
     base: dict[str, object] = {
         "correlation_id": "abc123",
         "verdict": Verdict.FALSE_POSITIVE,
         "confidence": 0.99,
         "justification": "input is a compile-time constant at config.py:12",
-        # The Adversary looked and filed at least one objection. Every test
-        # below that expects a dismissal to stand must earn this explicitly;
-        # the field's own default (0) is what test_zero_adversary_objections_*
-        # exercises directly.
         "adversary_objection_count": 1,
+        # The one objection the Adversary filed, carried into open_objections
+        # and rebutted - matches adversary_objection_count=1 exactly, so
+        # neither "unrebutted" nor "dropped" fires by default.
+        "open_objections": [
+            Objection(claim="default objection", rebutted=True, rebuttal="answered by default")
+        ],
+        "context_completeness": ContextCompleteness.COMPLETE,
     }
     return Adjudication.model_validate(base | kw)
 
 
 def test_confident_dismissal_stands() -> None:
     assert make().verdict is Verdict.FALSE_POSITIVE
+
+
+# --------------------------------------------------------------------------
+# B1-B4: each blocking condition proven in isolation. Every other condition
+# in `make()` is satisfied, so a failing assertion here can only mean the one
+# condition under test - not some other blocker firing alongside it.
+# --------------------------------------------------------------------------
+
+
+def test_b1_low_confidence_alone_blocks() -> None:
+    adj = make(confidence=0.5)
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert adj.downgrade_reason is not None
+    assert "confidence" in adj.downgrade_reason
+    assert "unrebutted" not in adj.downgrade_reason
+    assert "zero objections" not in adj.downgrade_reason
+    assert "completeness" not in adj.downgrade_reason
+
+
+def test_b2_unrebutted_objection_alone_blocks() -> None:
+    adj = make(open_objections=[Objection(claim="the validator is bypassed on the retry path")])
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert adj.downgrade_reason is not None
+    assert "unrebutted" in adj.downgrade_reason
+    assert "confidence" not in adj.downgrade_reason
+    assert "zero objections" not in adj.downgrade_reason
+    assert "completeness" not in adj.downgrade_reason
+
+
+def test_b3_insufficient_completeness_alone_blocks() -> None:
+    adj = make(context_completeness=ContextCompleteness.INSUFFICIENT)
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert adj.downgrade_reason is not None
+    assert "completeness" in adj.downgrade_reason
+    assert "confidence" not in adj.downgrade_reason
+    assert "unrebutted" not in adj.downgrade_reason
+    assert "zero objections" not in adj.downgrade_reason
+
+
+def test_b4_zero_adversary_objections_alone_blocks() -> None:
+    adj = make(adversary_objection_count=0)
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert adj.downgrade_reason is not None
+    assert "zero objections" in adj.downgrade_reason
+    assert "confidence" not in adj.downgrade_reason
+    assert "unrebutted" not in adj.downgrade_reason
+    assert "completeness" not in adj.downgrade_reason
+
+
+def test_dropped_adversary_objection_alone_blocks() -> None:
+    """The Adversary filed one objection (adversary_objection_count=1), but
+    the Adjudicator's own open_objections is empty - the objection was
+    dropped, not resolved. Caught by count comparison, not by an unrebutted
+    entry (there is no entry to be unrebutted)."""
+    adj = make(adversary_objection_count=1, open_objections=[])
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert adj.downgrade_reason is not None
+    assert "dropped" in adj.downgrade_reason
+    assert "confidence" not in adj.downgrade_reason
+    assert "unrebutted" not in adj.downgrade_reason
+    assert "completeness" not in adj.downgrade_reason
+
+
+def test_partial_completeness_does_not_block() -> None:
+    """PARTIAL is evidence the model weighs, not a structural blocker - only
+    INSUFFICIENT (and the missing/None case below) is."""
+    assert make(context_completeness=ContextCompleteness.PARTIAL).verdict is Verdict.FALSE_POSITIVE
+
+
+def test_missing_completeness_is_treated_as_insufficient() -> None:
+    """A caller that forgot to report completeness gets the safe outcome."""
+    kw = {k: v for k, v in make().model_dump().items() if k != "context_completeness"}
+    adj = Adjudication.model_validate(kw | {"verdict": Verdict.FALSE_POSITIVE})
+    assert adj.context_completeness is None
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert "completeness" in (adj.downgrade_reason or "")
+
+
+def test_headline_adversarial_case() -> None:
+    """High confidence, filed but unrebutted objection: must still downgrade.
+    This is the case the whole safety rule exists to catch - a model that is
+    very sure, with a prosecution that was never actually answered."""
+    adj = make(
+        confidence=0.99,
+        open_objections=[Objection(claim="the allowlist only checks the prefix")],
+    )
+    assert adj.verdict is Verdict.NEEDS_HUMAN_REVIEW
+    assert adj.downgraded_from is Verdict.FALSE_POSITIVE
 
 
 @pytest.mark.parametrize("conf", [0.0, 0.5, 0.84, 0.8499])

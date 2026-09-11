@@ -1,0 +1,1 @@
+{"position": "TRUE_POSITIVE", "confidence": 0.9, "reasoning": "the flagged sink is reached directly from an HTTP handler with no intervening check", "evidence_lines": [{"path": "src/app.py", "line": 1}], "unresolved_questions": []}
