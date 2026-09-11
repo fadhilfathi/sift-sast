@@ -72,9 +72,24 @@ class CodeSpan(BaseModel):
         redaction operates on it directly. Delimiting lives here, on the data
         structure, rather than in a prompt template a future span type could
         bypass by omission.
+
+        Measured, P5 step 5: analyzed source containing the literal delimiter
+        text (`<<<END UNTRUSTED SOURCE>>>`, or a fake `<<<UNTRUSTED SOURCE
+        ...>>>` reopening one) reached the model unescaped, so a real
+        embedded copy of either marker was indistinguishable from the one
+        this method appends - a source file could forge a "close" and inject
+        text that reads as being outside the untrusted block, or forge a
+        second "open" to relabel trailing content as a new span. Every `<<<`
+        and `>>>` run inside `source` is broken with an inserted space before
+        wrapping, so the two real markers below are always the only exact
+        occurrences in the returned block. This is defense in depth, not the
+        primary control - untrusted delimiting plus the JSON-schema output
+        contract (SECURITY.md) is what actually keeps analyzed text from
+        reaching a verdict - but a confusable delimiter is still a bug.
         """
         header = _UNTRUSTED_BEGIN.format(path=self.path, start=self.start_line, end=self.end_line)
-        return f"{header}\n{self.source}\n{_UNTRUSTED_END}"
+        safe_source = self.source.replace("<<<", "< <<").replace(">>>", "> >>")
+        return f"{header}\n{safe_source}\n{_UNTRUSTED_END}"
 
 
 class CallSite(BaseModel):
