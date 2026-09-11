@@ -1,0 +1,1 @@
+{"verdict": "TRUE_POSITIVE", "confidence": 0.9, "justification": "cites a line that does not exist in the repo", "evidence_lines": [{"path": "src/app.py", "line": 999999}], "unresolved_questions": [], "open_objections": []}

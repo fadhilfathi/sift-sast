@@ -201,22 +201,26 @@ can pattern-match instead of re-parsing prose:
   reachability path.
 - **COMPLETE** — none of the above fired.
 
-**The P5 interface contract, decided now and documented so P5 does not invent
-it under deadline:** `Adjudication` will carry a `context_completeness` field
-copied from the bundle, and `enforce_safety_rule`
-(`src/sift/models/verdict.py`) will gain a third blocking condition alongside
-the existing confidence floor and the unrebutted-objection check — **the exact
-same validator, the exact same downgrade path** — so that `FALSE_POSITIVE`
-additionally requires `context_completeness is not INSUFFICIENT`. `PARTIAL`
-does not block by rule; it is evidence the adjudicator weighs, the same as any
-other note. Only `INSUFFICIENT` forces the downgrade, structurally, the way a
-confidence of 0.60 does today.
+**The P5 interface contract, specified here in P3 and implemented in P5 step
+4:** `Adjudication` carries a `context_completeness` field copied from the
+bundle, and `enforce_safety_rule` (`src/sift/models/verdict.py`) gained a
+blocking condition alongside the confidence floor and the unrebutted-objection
+check — **the exact same validator, the exact same downgrade path** — so that
+`FALSE_POSITIVE` additionally requires `context_completeness is not
+INSUFFICIENT`. `PARTIAL` does not block by rule; it is evidence the
+adjudicator weighs, the same as any other note. Only `INSUFFICIENT` (or a
+missing value — see below) forces the downgrade, structurally, the way a
+confidence of 0.60 does.
 
-This is a schema change to `Adjudication` and is **not implemented in P3** —
-nothing in this phase produces an `Adjudication`. It is specified now, the way
-the cache key was specified in P1 before `ContextBundle` existed to key on, so
-that when P5 wires the orchestrator the contract already has a location and a
-mechanism instead of a decision made in a hurry.
+This was a schema change to `Adjudication`, not implementable in P3 — nothing
+in that phase produces an `Adjudication`. It was specified then, the way the
+cache key was specified in P1 before `ContextBundle` existed to key on, so
+that when P5 wired the orchestrator the contract already had a location and a
+mechanism instead of a decision made in a hurry. `ContextCompleteness` itself
+moved from this module to `sift.models.verdict` to make the field possible
+without a circular import (`context.py` already imports `FileLineRef` from
+`verdict.py`); it is re-exported here so nothing importing
+`sift.models.context.ContextCompleteness` had to change.
 
 ### D7 — Caller graph depth and honest truncation
 
@@ -362,11 +366,33 @@ The first three run concurrently on a shared, prompt-cached context prefix.
 
 `FALSE_POSITIVE` requires `confidence >= 0.85` **and** no unrebutted Adversary
 objection **and** the Adversary having filed at least one objection in the
-first place. Otherwise the verdict becomes `NEEDS_HUMAN_REVIEW`, with
-`downgraded_from` and `downgrade_reason` recorded. Enforced in the schema, not in
-prompt text, so no model output can bypass it. `Adjudication.adversary_objection_count`
-is the field this last condition reads; it defaults to zero, so a caller that
-forgets to report it gets the safe outcome rather than an accidental pass.
+first place **and** `context_completeness is not INSUFFICIENT` (D6, wired in
+P5 step 4 — see below). Otherwise the verdict becomes `NEEDS_HUMAN_REVIEW`,
+with `downgraded_from` and `downgrade_reason` recorded. Enforced in the
+schema, not in prompt text, so no model output can bypass it.
+`Adjudication.adversary_objection_count` is the field the objection-count
+condition reads; it defaults to zero, so a caller that forgets to report it
+gets the safe outcome rather than an accidental pass. `context_completeness`
+defaults to `None` and is treated the same as `INSUFFICIENT` for the same
+reason.
+
+**Measured, P5 step 4: counting objections is not the same as carrying them
+forward.** Building the "injection-compliant" fixture for step 4 — a
+compromised Adjudicator that fully obeys an injected instruction — surfaced
+a real gap the count-only check above could not catch: `adversary_objection_
+count > 0` proves the Adversary filed something, but says nothing about
+whether the Adjudicator's own `open_objections` actually contains it. A
+model that reports an honest count while silently omitting the objections
+themselves from its output — rather than rebutting them, or leaving them
+unrebutted — sailed straight through both existing conditions: the count
+check saw a nonzero number, and the unrebutted check had nothing to find
+unrebutted because the list handed to it was empty. `enforce_safety_rule`
+now additionally requires `len(open_objections) >= adversary_objection_
+count`; a shortfall is reported as "N adversary objection(s) dropped before
+adjudication", verified by the same deliberate-mutation practice as every
+other condition here. Filed as its own case (not one of the four the P5 step
+4 kickoff named), because it was found by building the adversarial fixture
+work that kickoff asked for, not invented separately from it.
 
 ### The Adversary's `position` is not its signal — `objections` is
 

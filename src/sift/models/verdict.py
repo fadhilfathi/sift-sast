@@ -30,6 +30,26 @@ class AgentRole(StrEnum):
     ADJUDICATOR = "ADJUDICATOR"
 
 
+class ContextCompleteness(StrEnum):
+    """How much of the intended context was actually retrieved.
+
+    Defined here rather than in `sift.models.context` (where the rest of the
+    completeness machinery - `CompletenessReason`, `completeness_from` -
+    lives) because `Adjudication` below needs it too, and `context.py`
+    already imports `FileLineRef` from this module; putting it there would
+    make a cycle. `sift.models.context` re-exports this name so
+    `from sift.models.context import ContextCompleteness` still works.
+
+    Not an absence signal buried in a warning list. Decision D6 specifies
+    that `Adjudication` carries this value and that `INSUFFICIENT` blocks a
+    FALSE_POSITIVE verdict on the same footing as the confidence floor.
+    """
+
+    COMPLETE = "COMPLETE"
+    PARTIAL = "PARTIAL"
+    INSUFFICIENT = "INSUFFICIENT"
+
+
 class FileLineRef(BaseModel):
     """A citation into analyzed source. Validated against the real file before use."""
 
@@ -167,11 +187,22 @@ class Adjudication(BaseModel):
             "default is zero: a caller must affirmatively report that the Adversary looked."
         ),
     )
+    context_completeness: ContextCompleteness | None = Field(
+        default=None,
+        description=(
+            "Copied from ContextBundle.completeness (decision D6). INSUFFICIENT blocks "
+            "FALSE_POSITIVE on the same footing as the confidence floor — the tool cannot "
+            "rule out the dangerous interpretation regardless of how confident the model is. "
+            "None is treated the same as INSUFFICIENT: a caller that forgot to report "
+            "completeness gets the safe outcome, not a free pass."
+        ),
+    )
 
     @model_validator(mode="after")
     def enforce_safety_rule(self) -> Self:
-        """A dismissal must clear the confidence floor, answer every objection, and
-        have had a real prosecution run against it in the first place.
+        """A dismissal must clear the confidence floor, answer every objection, have
+        had a real prosecution run against it, and rest on context the tool actually
+        finished retrieving.
 
         Runs on assignment too, so a later edit cannot sneak a weak dismissal through.
         """
@@ -185,6 +216,19 @@ class Adjudication(BaseModel):
             reasons.append(f"{len(unrebutted)} unrebutted adversary objection(s)")
         if self.adversary_objection_count == 0:
             reasons.append("adversary filed zero objections")
+        elif len(self.open_objections) < self.adversary_objection_count:
+            # The Adversary filed N objections, but fewer than N made it into
+            # open_objections. Counting alone (the check above) cannot catch
+            # this: a compromised or merely careless Adjudicator can report a
+            # nonzero adversary_objection_count while quietly omitting the
+            # objections themselves from its own output, rather than
+            # rebutting them - dropping is not resolving.
+            dropped = self.adversary_objection_count - len(self.open_objections)
+            reasons.append(f"{dropped} adversary objection(s) dropped before adjudication")
+        if self.context_completeness is None or self.context_completeness is (
+            ContextCompleteness.INSUFFICIENT
+        ):
+            reasons.append(f"context completeness is {self.context_completeness}")
         if not reasons:
             return self
 

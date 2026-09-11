@@ -304,6 +304,9 @@ async def run_pipeline(
     # "The Adversary's position is not its signal". Computed from what the
     # Adversary actually filed, not anything the Adjudicator reports.
     adjudicator_payload["adversary_objection_count"] = len(adversary_output.objections)
+    # Same rule: copied from the bundle the tool actually built, never taken
+    # on the Adjudicator's own word - see docs/ARCHITECTURE.md decision D6.
+    adjudicator_payload["context_completeness"] = bundle.completeness.value
     try:
         adjudication = Adjudication.model_validate(adjudicator_payload)
     except ValidationError as exc:
