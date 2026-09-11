@@ -56,6 +56,32 @@ def pipeline_config() -> PipelineConfig:
     )
 
 
+def realistic_pipeline_config() -> PipelineConfig:
+    """Real per-role model tiers - Haiku for the three analysts, Opus for the
+    Adjudicator (CONTRIBUTING.md: never downgraded to save cost) - unlike
+    `pipeline_config()` above, which deliberately uses one model everywhere
+    for wiring tests that do not care about tier correctness."""
+    haiku = AgentCall(
+        model=ModelId.HAIKU, provider_config=ProviderConfig(model="x/haiku", api_key="test-key")
+    )
+    opus = AgentCall(
+        model=ModelId.OPUS, provider_config=ProviderConfig(model="x/opus", api_key="test-key")
+    )
+    return PipelineConfig(
+        reachability=haiku,
+        exploitability=haiku,
+        adversary=haiku,
+        adjudicator=opus,
+        prompt_hashes={"reachability.txt": "abc"},
+        repo_root=PROJECT,
+        shared_context_template=(PROMPTS / "shared_context.txt").read_text(encoding="utf-8"),
+        reachability_template=(PROMPTS / "reachability.txt").read_text(encoding="utf-8"),
+        exploitability_template=(PROMPTS / "exploitability.txt").read_text(encoding="utf-8"),
+        adversary_template=(PROMPTS / "adversary.txt").read_text(encoding="utf-8"),
+        adjudicator_template=(PROMPTS / "adjudicator.txt").read_text(encoding="utf-8"),
+    )
+
+
 def provider_response(content: str) -> ProviderResponse:
     return ProviderResponse(
         content=content, model="x/y", prompt_tokens=100, completion_tokens=50, cost_usd=0.001

@@ -63,20 +63,30 @@ def estimate_tokens(text: str) -> int:
 
 @dataclass(frozen=True)
 class CallEstimate:
-    """One model call's estimated cost, before it is made."""
+    """One model call's estimated cost, before it is made.
+
+    `cached_input_tokens` is the portion read from a prior cache write
+    (discounted at `cache_read_multiplier`). `cache_write_tokens` is the
+    portion of *this* call that primes the cache for later calls to read -
+    priced at the premium `cache_write_multiplier`, not the base rate. Both
+    default to 0, so a caller estimating a single uncached call (P4's shape)
+    is unaffected.
+    """
 
     model: ModelId
     input_tokens: int
     output_tokens: int
     cached_input_tokens: int = 0
+    cache_write_tokens: int = 0
 
     @property
     def usd(self) -> float:
         pricing = PRICING[self.model]
-        fresh_input = max(0, self.input_tokens - self.cached_input_tokens)
+        fresh_input = max(0, self.input_tokens - self.cached_input_tokens - self.cache_write_tokens)
         cost = (
             fresh_input * pricing.input_per_mtok
             + self.cached_input_tokens * pricing.input_per_mtok * pricing.cache_read_multiplier
+            + self.cache_write_tokens * pricing.input_per_mtok * pricing.cache_write_multiplier
             + self.output_tokens * pricing.output_per_mtok
         ) / 1_000_000
         return cost
