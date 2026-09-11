@@ -256,7 +256,7 @@ future spend decision:**
       live evaluation**
 - [ ] Injection resistance, measured rate: the eval class scores structural
       survival against real model behavior, not just delimiter integrity — harness
-      built; **unrun pending live evaluation**
+      built; **not yet measured, unrun pending live evaluation**
 - [ ] **Honesty clause** — if multi-agent does not meaningfully beat single-prompt,
       say so plainly and recommend cutting it. Cannot be applied with nothing run
       to compare; the clause stands as this phase's standard for whoever runs the
