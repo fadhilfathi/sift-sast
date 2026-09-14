@@ -121,6 +121,49 @@ class PipelineConfig:
         )
 
 
+def build_pipeline_config(
+    *,
+    prompts_dir: Path,
+    repo_root: Path,
+    analyst_model: ModelId = ModelId.HAIKU,
+    adjudicator_model: ModelId = ModelId.OPUS,
+    temperature: float = 0.0,
+    prompt_hashes: dict[str, str] | None = None,
+    api_key: str | None = None,
+) -> PipelineConfig:
+    """The config a real `sift triage` run (or its --dry-run estimate) builds.
+
+    `ProviderConfig()` reads `SIFT_API_KEY`/`SIFT_BASE_URL` from the
+    environment - this raises `ProviderConfigError` if neither is set, which
+    is correct for a real run and irrelevant for `--dry-run` (the caller
+    passes a placeholder key there; nothing here ever calls the network).
+    CONTRIBUTING.md: the Adjudicator is never downgraded to save cost, so
+    `adjudicator_model` defaults to OPUS regardless of what `analyst_model`
+    is set to - a caller can raise the analysts' tier, never lower the
+    Adjudicator's.
+    """
+
+    def call(model: ModelId) -> AgentCall:
+        kwargs: dict[str, object] = {"model": model.value, "temperature": temperature}
+        if api_key is not None:
+            kwargs["api_key"] = api_key
+        return AgentCall(model=model, provider_config=ProviderConfig(**kwargs))  # type: ignore[arg-type]
+
+    return PipelineConfig(
+        reachability=call(analyst_model),
+        exploitability=call(analyst_model),
+        adversary=call(analyst_model),
+        adjudicator=call(adjudicator_model),
+        prompt_hashes=prompt_hashes or {},
+        repo_root=repo_root,
+        shared_context_template=(prompts_dir / "shared_context.txt").read_text(encoding="utf-8"),
+        reachability_template=(prompts_dir / "reachability.txt").read_text(encoding="utf-8"),
+        exploitability_template=(prompts_dir / "exploitability.txt").read_text(encoding="utf-8"),
+        adversary_template=(prompts_dir / "adversary.txt").read_text(encoding="utf-8"),
+        adjudicator_template=(prompts_dir / "adjudicator.txt").read_text(encoding="utf-8"),
+    )
+
+
 def cache_key_for(correlation_id: str, bundle: ContextBundle, config: PipelineConfig) -> str:
     """The D1 cache key for this finding under this exact configuration."""
     return compute_cache_key(

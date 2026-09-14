@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections import Counter
 from pathlib import Path
@@ -12,11 +13,26 @@ import typer
 from sift import __version__, ingest, prefilter
 from sift.context.builder import build_context_bundle
 from sift.emit import sarif as emit_sarif
-from sift.eval.budget import DEFAULT_BUDGET_USD
+from sift.emit.annotate import annotate_adjudicated, annotate_prefiltered
+from sift.emit.pr_comment import render_pr_comment
+from sift.emit.report import build_run_report, write_run_report
+from sift.eval.budget import DEFAULT_BUDGET_USD, BudgetExceededError, BudgetGuard
 from sift.eval.config import EvalConfig, git_sha, hash_prompt_dir
+from sift.eval.cost import ModelId
 from sift.eval.dataset import load_dataset, load_rejected
 from sift.eval.harness import dry_run_estimate
+from sift.ingest.fingerprint import FindingRef
+from sift.llm.provider import ProviderConfigError, complete
 from sift.models.context import FileClass
+from sift.models.verdict import TriageResult
+from sift.orchestrator.dry_run import pipeline_dry_run_estimate
+from sift.orchestrator.pipeline import build_pipeline_config, run_pipeline
+from sift.prefilter import Disposition
+
+#: The prompts shipped inside the installed package - resolved relative to
+#: this module's own location, never the caller's working directory, so
+#: `uvx --from sift-sast sift triage ...` finds them regardless of cwd.
+DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parent / "agents" / "prompts"
 
 app = typer.Typer(
     name="sift",
@@ -85,15 +101,32 @@ def triage(
             ),
         ),
     ] = None,
+    analyst_model: Annotated[
+        ModelId, typer.Option(help="Model tier for Reachability/Exploitability/Adversary.")
+    ] = ModelId.HAIKU,
+    adjudicator_model: Annotated[
+        ModelId,
+        typer.Option(
+            help="Model tier for the Adjudicator. Never lower this to save cost - CONTRIBUTING.md."
+        ),
+    ] = ModelId.OPUS,
+    budget: Annotated[
+        float, typer.Option(help="Hard spend ceiling in USD, checked before each finding.")
+    ] = DEFAULT_BUDGET_USD,
+    prompts: Annotated[Path, typer.Option(help="Prompt template directory.")] = DEFAULT_PROMPTS_DIR,
+    report_out: Annotated[Path, typer.Option(help="JSON run report path.")] = Path(
+        "sift-report.json"
+    ),
+    comment_out: Annotated[Path, typer.Option(help="Markdown PR comment path.")] = Path(
+        "sift-comment.md"
+    ),
 ) -> None:
-    """Triage a SARIF file and emit annotated SARIF.
+    """Triage a SARIF file: pre-filter, build context, adjudicate, emit.
 
-    Without --dry-run this exits 2: adjudication lands in P5, and reporting a
-    successful triage that never adjudicated anything would be a lie.
+    `--dry-run` runs Stage 1 and Stage 2 for real (both deterministic, free)
+    and estimates Stage 3's cost without calling a model. Without it, Stage 3
+    runs for real and needs `SIFT_API_KEY` set.
     """
-    if not dry_run:
-        _todo("P5 (agents). --dry-run works today: parse, fingerprint, and emit")
-
     try:
         log, source = ingest.load(sarif)
     except ingest.SarifParseError as exc:
@@ -101,48 +134,156 @@ def triage(
         raise typer.Exit(code=1) from exc
 
     findings = ingest.results_of(log)
-    written = emit_sarif.write(log, out, source=source)
-
     by_source = Counter(ref.identity_source.value for ref in findings)
     degraded = sum(1 for ref in findings if not ref.stable)
 
-    typer.echo(f"{sarif}  ->  {out}  ({written:,} bytes)")
+    typer.echo(f"{sarif}  ->  {out}")
     typer.echo(f"  runs:     {len(log.runs)}")
     typer.echo(f"  findings: {len(findings)}")
     for name, count in by_source.most_common():
         typer.echo(f"    {name:28} {count}")
     if degraded:
-        # Not a warning about this run failing — a warning that these findings
-        # will detach from their verdicts the next time a line moves above them.
         typer.secho(
             f"  {degraded} finding(s) have a positional identity and will detach on any "
-            f"line shift. The context builder resolves this in P3.",
+            f"line shift.",
             fg=typer.colors.YELLOW,
         )
 
-    report = prefilter.run(
-        findings,
-        repo_root=repo,
-        resolve_classes=frozenset(resolve_class or ()),
+    prefilter_report = prefilter.run(
+        findings, repo_root=repo, resolve_classes=frozenset(resolve_class or ())
     )
     typer.echo("\n  stage 1 - deterministic pre-filter, no model calls")
-    for name, count in sorted(report.by_disposition.items()):
+    for name, count in sorted(prefilter_report.by_disposition.items()):
         typer.echo(f"    {name:28} {count}")
-    typer.echo(f"    {'file classes':28} {report.by_class}")
-    if report.cross_run_overlap:
-        typer.echo(
-            f"    {'same id in >1 run':28} {report.cross_run_overlap} (reported, not merged)"
-        )
     typer.echo(
-        f"    settled without a model:     {report.resolved_without_a_model:.1%}"
-        f"  ({report.total - report.adjudicate_count}/{report.total})"
+        f"    settled without a model:     {prefilter_report.resolved_without_a_model:.1%}"
+        f"  ({prefilter_report.total - prefilter_report.adjudicate_count}/{prefilter_report.total})"
     )
-    if report.resolvable_by_class and not resolve_class:
-        # Shown so the policy choice is made against numbers rather than a guess.
-        offer = ", ".join(f"{k}={v}" for k, v in sorted(report.resolvable_by_class.items()))
+    if prefilter_report.resolvable_by_class and not resolve_class:
+        offer = ", ".join(
+            f"{k}={v}" for k, v in sorted(prefilter_report.resolvable_by_class.items())
+        )
         typer.echo(f"    could be dismissed by class: {offer}  (not dismissed; see below)")
-    typer.echo("  LLM calls: 0    cost: $0.00    (no adjudication in P1)")
-    typer.secho("  no verdicts written; output is a passthrough copy", fg=typer.colors.YELLOW)
+
+    refs_by_id: dict[str, FindingRef] = {
+        d.ref.correlation_id: d.ref for d in prefilter_report.decisions
+    }
+    survivors = [d for d in prefilter_report.decisions if d.disposition is Disposition.ADJUDICATE]
+
+    typer.echo("\n  stage 2 - context builder (tree-sitter, no LLM)")
+    bundles = {d.ref.correlation_id: build_context_bundle(d.ref, repo) for d in survivors}
+    typer.echo(f"    bundles built: {len(bundles)}")
+
+    if not dry_run:
+        try:
+            config = build_pipeline_config(
+                prompts_dir=prompts,
+                repo_root=repo,
+                analyst_model=analyst_model,
+                adjudicator_model=adjudicator_model,
+                prompt_hashes=hash_prompt_dir(prompts),
+            )
+        except ProviderConfigError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1) from exc
+    else:
+        config = build_pipeline_config(
+            prompts_dir=prompts,
+            repo_root=repo,
+            analyst_model=analyst_model,
+            adjudicator_model=adjudicator_model,
+            prompt_hashes=hash_prompt_dir(prompts),
+            api_key="dry-run-placeholder",
+        )
+
+    typer.echo("\n  stage 3 - adjudication (4 agents per finding)")
+    results: dict[str, TriageResult] = {}
+    exceeded = False
+    if dry_run:
+        estimate = pipeline_dry_run_estimate(list(bundles.values()), config)
+        typer.echo(f"    calls:      {estimate.call_count}")
+        typer.echo(f"    cost:       ${estimate.usd:.4f}   (budget ${budget:.2f})")
+        typer.secho("    no model called; nothing adjudicated", fg=typer.colors.YELLOW)
+        exceeded = estimate.usd > budget
+    else:
+        guard = BudgetGuard(limit_usd=budget)
+        for correlation_id, bundle in bundles.items():
+            if exceeded:
+                break
+            # Coarse-grained per finding, not per LLM call: run_pipeline makes
+            # its own 4 calls atomically and does not expose a hook between
+            # them. Estimating and checking per finding is still "before each
+            # call" at the granularity this orchestrator actually offers.
+            call_estimate = pipeline_dry_run_estimate([bundle], config).usd
+            try:
+                guard.check_before_call(call_estimate)
+            except BudgetExceededError:
+                exceeded = True
+                break
+            triage_result = asyncio.run(
+                run_pipeline(
+                    correlation_id=correlation_id,
+                    bundle=bundle,
+                    config=config,
+                    complete_fn=complete,
+                )
+            )
+            guard.record_actual(triage_result.cost_usd)
+            results[correlation_id] = triage_result
+        typer.echo(f"    adjudicated: {len(results)}/{len(bundles)}")
+        typer.echo(f"    cost:        ${guard.spent_usd:.4f}   (budget ${budget:.2f})")
+        if exceeded:
+            typer.secho(
+                "    BUDGET EXCEEDED - remaining findings escalated, not adjudicated",
+                fg=typer.colors.RED,
+            )
+
+    for decision in prefilter_report.decisions:
+        ref = decision.ref
+        run = log.runs[ref.run_index]
+        result = run.results[ref.result_index]
+        maybe_triage_result = results.get(ref.correlation_id)
+        if maybe_triage_result is not None:
+            run.results[ref.result_index] = annotate_adjudicated(
+                result, ref, decision, maybe_triage_result
+            )
+        elif decision.disposition is Disposition.ADJUDICATE and not dry_run:
+            skipped = decision.model_copy(
+                update={
+                    "resolved_by": "triage:budget-exhausted",
+                    "justification": (
+                        "budget exceeded before this finding could be adjudicated; "
+                        "escalate to a human"
+                    ),
+                }
+            )
+            run.results[ref.result_index] = annotate_prefiltered(result, ref, skipped)
+        else:
+            run.results[ref.result_index] = annotate_prefiltered(result, ref, decision)
+
+    written = emit_sarif.write(log, out, source=source)
+    typer.echo(f"\n  wrote {written:,} bytes to {out}")
+
+    run_report = build_run_report(
+        total_findings=len(findings),
+        resolved_by_prefilter=prefilter_report.total - prefilter_report.adjudicate_count,
+        results=list(results.values()),
+        config=config,
+    )
+    write_run_report(run_report, report_out)
+    typer.echo(f"  wrote run report to {report_out}")
+
+    comment = render_pr_comment(
+        [(refs_by_id[cid], r) for cid, r in results.items()],
+        total_cost_usd=run_report.total_cost_usd,
+        dry_run=dry_run,
+    )
+    comment_out.write_text(comment, encoding="utf-8")
+    typer.echo(f"  wrote PR comment to {comment_out}")
+
+    if exceeded and dry_run:
+        typer.secho("ESTIMATED COST EXCEEDS BUDGET", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
 
 
 context_app = typer.Typer(
