@@ -57,6 +57,8 @@ It is reused at P6 for the Action end-to-end test and any time the emitter chang
 
 ### Procedure
 
+**P1** (`--dry-run`, passthrough only — establishes upload/readback mechanics):
+
 1. Edit `sarif/input.sarif` in that repo if the case being tested has changed, and
    make sure every line number it references exists in `src/app.py`.
 2. Regenerate the emitted file with the SIFT build under test:
@@ -69,7 +71,22 @@ It is reused at P6 for the Action end-to-end test and any time the emitter chang
    `sarif/emitted.sarif` or `src/`, and can also be dispatched manually.
 4. Watch it: `gh run watch <id> -R fadhilfathi/sarif-upload-check`
 
-The workflow uploads through the code-scanning API, polls
+**P6** (real four-agent annotation, zero spend — re-verifies the emitter that
+actually attaches verdicts and `Suppression`s, not just a passthrough copy):
+
+1. Clone `fadhilfathi/sarif-upload-check` locally.
+2. From this repo: `python scripts/reverify_sarif_upload.py /path/to/sarif-upload-check`.
+   Runs the real orchestrator (`run_pipeline`) against a deterministic fake
+   `complete_fn` keyed on each finding's `rule_id` — zero network, zero
+   spend, real `annotate.py` output. `command-injection`/`sql-injection`/
+   `path-traversal` come back `TRUE_POSITIVE`; the two `suppressed-*` rules
+   come back `FALSE_POSITIVE`, so the regenerated file carries a genuine
+   SIFT-emitted `Suppression`, appended to (never replacing) any
+   pre-existing one on that result.
+3. In the harness checkout: commit `sarif/emitted.sarif`, push.
+4. Watch the triggered run: `gh run watch <id> -R fadhilfathi/sarif-upload-check`.
+
+Either way, the workflow uploads through the code-scanning API, polls
 `/code-scanning/sarifs/{id}` until `processing_status` is `complete`, then reads
 `/code-scanning/alerts` back and asserts on rule IDs, file paths, line numbers,
 `security_severity_level`, and open/dismissed state.
@@ -86,10 +103,12 @@ not be able to upload unless you run `gh auth refresh -s security_events`.
 | Do file paths and line numbers survive? | Yes — `src/app.py` at lines 19, 26, 32 | P1 |
 | Does `security-severity` survive into the alert? | Yes — `9.8` rendered as `critical` | P1 |
 | Do SARIF `suppressions` dismiss an alert? | **No.** Neither `external` nor `inSource`. Five uploaded, five open, zero dismissed. | P1 |
+| Does the finding still hold for a `Suppression` written by the real P5/P6 pipeline, not a hand-crafted one? | **Yes, unchanged.** Both `suppressed-*` alerts stayed open after a real `FALSE_POSITIVE` adjudication appended its own `Suppression` alongside the pre-existing one. | P6 |
 
-The last row is why dismissals in P6 must go through
-`PATCH /code-scanning/alerts/{number}` rather than through the SARIF document. See
-`docs/ARCHITECTURE.md`.
+The suppression rows are why dismissals must go through
+`PATCH /code-scanning/alerts/{number}` rather than through the SARIF document —
+and why this Action does not call that endpoint automatically (see README,
+"Suppression behavior"). See also `docs/ARCHITECTURE.md`.
 
 ## Secrets
 
