@@ -1,42 +1,122 @@
 # SIFT — SARIF Insight & Finding Triage
 
-Triage SAST findings with AST-grounded code context and multi-agent LLM adjudication.
-SARIF 2.1.0 in, annotated SARIF 2.1.0 out. Findings are never deleted, only labeled.
+Triage SAST findings with AST-grounded code context and a four-agent LLM
+adjudication pipeline. SARIF 2.1.0 in, annotated SARIF 2.1.0 out. Findings
+are never deleted, only labeled.
 
-> **Status: pre-release (v0.0.0).** The pipeline is not yet end to end. Every metric
-> below reads *not yet measured* and will stay that way until `make eval` produces it.
-> No number reaches this table without a committed eval report behind it.
+[![CI](https://github.com/fadhilfathi/sift-sast/actions/workflows/ci.yml/badge.svg)](https://github.com/fadhilfathi/sift-sast/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
-## Results
+## This tool's accuracy has not been measured
 
-| Metric | Value | Target |
-| --- | --- | --- |
-| **False suppression rate** (true positives wrongly dismissed) | not yet measured | **< 2%** |
-| False positives auto-dismissed | not yet measured | > 60% |
-| Prompt-injection resistance | not yet measured | 100% |
-| Cost per finding | not yet measured | — |
-| p95 latency per finding | not yet measured | — |
+No live model has ever adjudicated a real finding in this project. There is
+no precision, no recall, no false suppression rate, no coverage number, no
+injection-resistance rate. Zero live LLM calls have run, by deliberate
+design (see [Evaluation](#evaluation)) — not because measuring was skipped,
+but because it was decided that construction must not gate on a spend
+decision. If you run this tool today, you are the first measurement.
 
-False suppression rate is first on purpose. A missed true positive is roughly 50x
-worse than a retained false positive, and every tradeoff in this codebase resolves
-that way. See [Evaluation](#evaluation).
+What exists instead of a number:
 
-## Demo
+- A **103-finding labeled dataset** (45 true positive / 58 false positive,
+  an 84-entry private holdout), built to D10's inclusion criteria before any
+  label was assigned.
+- A **reproducible eval harness** — cost estimation, a budget guard, the
+  scoring module, provenance-stratified reporting — built, tested, and left
+  runnable.
+- `make eval` produces the real numbers the moment someone with an API key
+  runs it. That run has not happened yet.
 
-Not yet recorded. Lands with the first end-to-end pipeline (P5).
+A security tool that overclaims is worse than one that says "unvalidated,
+here is how to check." This is the second kind.
+
+## What is actually true — five measured findings
+
+These came from running things, not from reasoning about what should
+happen. They are the strongest content in this repository.
+
+1. **GitHub Code Scanning ignores SARIF `suppressions` entirely.** Measured
+   by uploading both `external` and `inSource` suppressions for real: 5
+   findings, 5 open alerts, 0 dismissed. Real dismissal needs
+   `PATCH /code-scanning/alerts/{number}` — a separate, explicitly-granted
+   permission this project does not use automatically. See
+   [Suppression behavior](#suppression-behavior-read-this-before-you-trust-a-dismissal).
+2. **An upstream tool fingerprint supplies stability, never distinctness.**
+   Semgrep's placeholder `"requires login"` fingerprint collapsed 45
+   findings across 20 files into one correlation ID; a naive pre-filter
+   dismissed 44 of them as duplicates of each other. Fixed by rejecting any
+   fingerprint value attached to more than one `(rule_id, uri, line)` within
+   a run.
+3. **Corpus triability is two numbers, never quoted alone: 3/103 (2.9%)**
+   on the full four-language fixture corpus, and **19/23 (82.6%)** of the
+   Python findings within it. The first says how much of *this specific
+   corpus* the tool can currently reason about; the second says how the
+   tool performs *when pointed at a language it supports*. Quoting either
+   without the other misleads in a different direction.
+4. **`pathlib` is host-flavored.** `Path("C:/Windows/win.ini")` is not
+   absolute on Linux — it's a relative path with a directory literally named
+   `C:`. Path safety in this project is checked as strings, not through
+   `pathlib`, because SIFT routinely runs on Linux against SARIF produced on
+   Windows.
+5. **Two safety-rule gaps were found only by building adversarial fixtures,
+   in code that had already been reviewed and tested.** A count-based check
+   proved an adversarial agent had *filed* an objection but never that it
+   *survived* into the final review — a compromised or careless step could
+   report an honest count while quietly dropping the objection itself. A
+   delimiter meant to mark untrusted data could be forged: source containing
+   the literal delimiter text reached a rendered prompt unescaped, measured
+   directly as 4 occurrences of the marker where exactly 2 were correct. Both
+   passed every check that existed until someone built the adversarial case
+   against them. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#why-the-adversarial-fixtures-exist).
 
 ## Quickstart
 
-Not yet functional. `sift triage` exits `2` until P5. Once it works:
-
 ```bash
 uv tool install sift-sast
-sift triage results.sarif --repo . --out triaged.sarif
+sift triage results.sarif --repo . --out triaged.sarif --dry-run
 ```
+
+`--dry-run` costs nothing and calls no model — it runs the deterministic
+stages for real (parse, fingerprint, pre-filter, build context) and prints
+exactly how many calls a real run would make and what they would cost. Drop
+`--dry-run` and set `SIFT_API_KEY` to actually adjudicate.
 
 ## GitHub Action
 
-Not yet published. Lands in P6.
+```yaml
+- uses: fadhilfathi/sift-sast@v1
+  with:
+    sarif: results.sarif
+    api-key: ${{ secrets.SIFT_API_KEY }}
+    dry-run: "false"   # defaults to "true" - opt in to spend explicitly
+```
+
+Full input/output list: [action.yml](action.yml). Set `api-key` from a
+repository or organization secret; it is read as `SIFT_API_KEY` and never
+logged. `dry-run` defaults to `"true"` — nobody should discover this tool
+by accidentally burning their API budget.
+
+### Suppression behavior — read this before you trust a dismissal
+
+**GitHub Code Scanning ignores SARIF `suppressions` entirely.** This
+project still emits a `Suppression` on a `FALSE_POSITIVE` verdict, because
+it is the interop-correct place for the justification and other SARIF
+consumers do read it — but it is **inert on GitHub**. Uploading annotated
+SARIF with suppressions attached will not dismiss the corresponding alert;
+it will still show as open.
+
+Real dismissal requires a separate, authenticated call to
+`PATCH /repos/{owner}/{repo}/code-scanning/alerts/{alert_number}`, which
+needs the `security-events: write` permission. **This Action does not make
+that call.** Automating it safely requires matching a SARIF result to a
+GitHub alert number, and a wrong match dismisses the wrong alert — silently
+hiding a real vulnerability is exactly the failure mode this project exists
+to prevent, so it is not automated here. If you want real dismissal, call
+the API yourself, deliberately, per finding.
+
+Assuming the SARIF `Suppression` this tool writes will dismiss a GitHub
+alert is the most likely real-world misuse of this Action. It will not.
 
 ## How it works
 
@@ -49,43 +129,76 @@ SARIF ─▶ 1. Pre-filter ─▶ 2. Context Builder ─▶ 3. Adjudication ─�
                             flow, sanitizers       Adversary     ┘
 ```
 
-Retrieval is deterministic; only judgment is delegated to a model. The Adjudicator
-is shown code, never asked to recall it. The Adversary exists to argue every finding
-*is* real — it counteracts the model's bias toward agreeable dismissal, which is this
-tool's worst failure mode.
+Retrieval is deterministic; only judgment is delegated to a model. The
+Adjudicator is shown code, never asked to recall it. The Adversary argues
+every finding *is* real and attacks every candidate mitigation — it exists
+to counteract the model's bias toward agreeable dismissal, this project's
+worst failure mode.
 
-Full data flow and schemas: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+A `FALSE_POSITIVE` verdict requires **five** independent conditions to hold
+at once, enforced in the schema (not prompt text), each proven in isolation
+and verified by deliberate mutation:
+
+| | Condition | Catches |
+| --- | --- | --- |
+| B1 | Confidence >= 0.85 | A dismissal without enough certainty to justify it |
+| B2 | No unrebutted Adversary objection | A prosecution that was never actually answered with cited code |
+| B3 | Context completeness is not `INSUFFICIENT` | A dismissal resting on context the tool never finished retrieving |
+| B4 | The Adversary filed at least one objection | An Adversary never made to prosecute at all |
+| B5 | Every filed objection reached the Adjudicator's own review | A count that proves filing, not survival — see finding 5 above |
+
+Full data flow, all thirteen numbered design decisions with rationale, and
+every measured finding: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Limitations
 
 Honest, current, and specific:
 
-- **Languages:** none shipped. Python lands in P3. JS, Java, Go are unscheduled.
-- **No taint analysis of its own.** SIFT reasons over the data flow the scanner
-  reported. If Semgrep or CodeQL got the flow wrong, SIFT inherits that error.
-- **Cross-file reachability is 1–2 hops.** Deep indirection, dynamic dispatch,
-  reflection, and framework magic will read as `UNKNOWN` and escalate to a human.
-- **No runtime or config awareness.** It cannot see feature flags, WAF rules,
-  deployment topology, or whether a route is actually exposed.
-- **It will be wrong sometimes.** The design goal is that its errors are
-  conservative — escalations, not silent dismissals — and that the rate is measured
-  and published rather than asserted.
-- **Cost:** unmeasured. Budget per run is enforced and printed; `--dry-run`
-  estimates before spending.
+- **Python only.** JS, Java, Go are unscheduled (see the roadmap's P7+).
+- **Accuracy is unmeasured.** See the top of this document.
+- **D12 is unresolved.** The four-agent pipeline has never been compared
+  against a single-prompt baseline. If it does not meaningfully beat one
+  when finally measured, the honesty clause in `docs/ROADMAP.md` applies:
+  multi-agent gets cut.
+- **Two dataset provenance classes are empty.** `OWASP_BENCHMARK` and
+  `JULIET` have no entries — the eval dataset is `HAND_LABELED` and
+  `REAL_WORLD` only. See [Evaluation](#evaluation).
+- **Cross-file call-graph resolution is name-based**, not type-resolved. It
+  can conflate two functions with the same name in different files.
+- **The sanitizer allowlist is a fixed set of regex patterns**, not a
+  general taint-sanitizer database. A real sanitizer it does not recognize
+  is treated as unconfirmed, which is the safe direction, but it is still a
+  coverage gap.
+- **Entrypoint detection is decorator-substring matching** (`@app.route`,
+  `@click.command`, …), not a framework-aware call-graph walk. A
+  differently-named or wrapped decorator will not be recognized.
+- **Cost per run is unmeasured** in the sense that matters: `--dry-run`'s
+  estimate is a `chars/4` heuristic, not a measured token count from a real
+  call, because no real call has been made.
+- **No taint analysis of its own.** SIFT reasons over the data flow the
+  scanner reported. If Semgrep or CodeQL got the flow wrong, SIFT inherits
+  that error.
+- **No runtime or config awareness.** It cannot see feature flags, WAF
+  rules, deployment topology, or whether a route is actually exposed.
 
 ## Evaluation
 
-`evals/dataset/` holds labeled findings — the finding, a repo snapshot, a ground
-truth label, and a rationale — seeded from OWASP Benchmark, the Juliet Test Suite,
-and real CVE-fix commits.
+`evals/dataset/` holds the 103-finding labeled dataset described above —
+each entry is a finding, a pinned repo snapshot, a ground-truth label, and a
+written rationale, tagged with one of four provenance classes
+(`CVE_FIX`, `HAND_LABELED`, `REAL_WORLD`, plus the currently-empty
+`OWASP_BENCHMARK`/`JULIET`).
 
 ```bash
-make eval-dry   # estimated cost and call count, spends nothing
-make eval       # writes evals/REPORT.md
+sift triage results.sarif --dry-run   # estimated cost and call count, spends nothing
+make eval-dry                          # same, for the eval harness itself
+make eval                              # run the labeled suite, write evals/REPORT.md
 ```
 
-Every report records model IDs, temperature, and prompt hashes. A metric without
-its config is meaningless and must not be published.
+Every report records model IDs, temperature, and prompt hashes. A metric
+without its configuration is meaningless and will not be published.
+Coverage, accuracy-on-covered, and escalation rate are always reported
+together — never precision or recall alone.
 
 ## Development
 
@@ -95,6 +208,8 @@ make gate       # ruff + mypy strict + pytest — must pass before any push
 ```
 
 Roadmap and per-phase acceptance criteria: [docs/ROADMAP.md](docs/ROADMAP.md).
+Design decisions and every measured finding, with rationale:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## License
 
