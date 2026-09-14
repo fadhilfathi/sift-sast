@@ -19,18 +19,36 @@ inputs:
     required: false
     default: .
   api-key:
-    description: API key for the LLM provider. Required unless dry-run is true.
+    description: >
+      API key for the LLM gateway. Required unless dry-run is true. Set it
+      from a repository or organization secret - never hardcode it in a
+      workflow file. Read as the SIFT_API_KEY environment variable.
     required: false
+  analyst-model:
+    description: Model tier for Reachability, Exploitability, and Adversary. HAIKU or OPUS.
+    required: false
+    default: HAIKU
+  adjudicator-model:
+    description: >
+      Model tier for the Adjudicator. Never set this to a cheaper tier than
+      analyst-model to save cost - the Adjudicator is the safety-critical
+      stage (CONTRIBUTING.md).
+    required: false
+    default: OPUS
   budget-usd:
-    description: Hard spend ceiling for the run, checked before each call.
+    description: Hard spend ceiling for the run, checked before each finding.
     required: false
     default: "5.00"
   dry-run:
-    description: Estimate cost and call count without spending anything.
+    description: >
+      Estimate cost and call count without spending anything or calling a
+      model. Defaults to true: nobody should discover this tool by
+      accidentally burning their API budget. Set to "false" to actually
+      adjudicate, once you have reviewed the estimate.
     required: false
-    default: "false"
+    default: "true"
   comment-on-pr:
-    description: Post a Markdown summary as a pull request comment.
+    description: Post (or update) a Markdown summary as a pull request comment.
     required: false
     default: "true"
 
@@ -38,14 +56,20 @@ outputs:
   sarif:
     description: Path to the annotated SARIF file.
     value: ${{ steps.triage.outputs.sarif }}
+  report:
+    description: Path to the JSON run report.
+    value: ${{ steps.triage.outputs.report }}
   true-positives:
     description: Count of findings adjudicated TRUE_POSITIVE.
     value: ${{ steps.triage.outputs.true-positives }}
   needs-review:
     description: Count of findings escalated to NEEDS_HUMAN_REVIEW.
     value: ${{ steps.triage.outputs.needs-review }}
+  false-positives:
+    description: Count of findings dismissed with justification (FALSE_POSITIVE).
+    value: ${{ steps.triage.outputs.false-positives }}
   cost-usd:
-    description: Total spend for the run.
+    description: Total spend for the run (0 on a dry run).
     value: ${{ steps.triage.outputs.cost-usd }}
 
 runs:
@@ -61,9 +85,67 @@ runs:
       shell: bash
       env:
         SIFT_API_KEY: ${{ inputs.api-key }}
-        SIFT_BUDGET_USD: ${{ inputs.budget-usd }}
       run: |
+        set -euo pipefail
+        report_path="${RUNNER_TEMP}/sift-report.json"
+        comment_path="${RUNNER_TEMP}/sift-comment.md"
+
         uvx --from sift-sast sift triage "${{ inputs.sarif }}" \
           --repo "${{ inputs.repo-root }}" \
           --out "${{ inputs.output }}" \
+          --analyst-model "${{ inputs.analyst-model }}" \
+          --adjudicator-model "${{ inputs.adjudicator-model }}" \
+          --budget "${{ inputs.budget-usd }}" \
+          --report-out "$report_path" \
+          --comment-out "$comment_path" \
           ${{ inputs.dry-run == 'true' && '--dry-run' || '' }}
+
+        echo "sarif=${{ inputs.output }}" >> "$GITHUB_OUTPUT"
+        echo "report=$report_path" >> "$GITHUB_OUTPUT"
+        echo "report_path=$report_path" >> "$GITHUB_ENV"
+        echo "comment_path=$comment_path" >> "$GITHUB_ENV"
+
+        python3 -c '
+        import json, os
+        with open(os.environ["report_path"], encoding="utf-8") as f:
+            report = json.load(f)
+        counts = report.get("verdict_counts", {})
+        out = os.environ["GITHUB_OUTPUT"]
+        with open(out, "a", encoding="utf-8") as f:
+            f.write(f"true-positives={counts.get(\"TRUE_POSITIVE\", 0)}\n")
+            f.write(f"needs-review={counts.get(\"NEEDS_HUMAN_REVIEW\", 0)}\n")
+            f.write(f"false-positives={counts.get(\"FALSE_POSITIVE\", 0)}\n")
+            f.write(f"cost-usd={report.get(\"total_cost_usd\", 0.0)}\n")
+        '
+
+    - name: Upload SIFT artifacts
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: sift-sast-report
+        path: |
+          ${{ inputs.output }}
+          ${{ env.report_path }}
+        if-no-files-found: warn
+
+    - name: Comment on pull request
+      if: ${{ inputs.comment-on-pr == 'true' && github.event.pull_request }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        repo="${{ github.repository }}"
+        pr="${{ github.event.pull_request.number }}"
+        marker='<!-- sift-sast:report -->'
+        body="$(cat "$comment_path")"
+
+        existing_id="$(gh api "repos/${repo}/issues/${pr}/comments" --paginate \
+          --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")"
+
+        if [ -n "$existing_id" ]; then
+          gh api --method PATCH "repos/${repo}/issues/comments/${existing_id}" \
+            -f body="$body" > /dev/null
+        else
+          gh api --method POST "repos/${repo}/issues/${pr}/comments" \
+            -f body="$body" > /dev/null
+        fi

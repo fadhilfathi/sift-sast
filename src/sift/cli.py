@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import Counter
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -33,6 +34,20 @@ from sift.prefilter import Disposition
 #: this module's own location, never the caller's working directory, so
 #: `uvx --from sift-sast sift triage ...` finds them regardless of cwd.
 DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parent / "agents" / "prompts"
+
+
+class ModelTier(StrEnum):
+    """The CLI-facing spelling. `ModelId`'s values are gateway model slugs
+    (`anthropic/claude-haiku-4-5`), which Typer would otherwise ask a user to
+    type verbatim as a --analyst-model value - an implementation detail this
+    interface should not leak (CONTRIBUTING.md: the gateway is named only in
+    sift.llm.provider)."""
+
+    HAIKU = "HAIKU"
+    OPUS = "OPUS"
+
+
+_MODEL_TIER_TO_ID = {ModelTier.HAIKU: ModelId.HAIKU, ModelTier.OPUS: ModelId.OPUS}
 
 app = typer.Typer(
     name="sift",
@@ -102,14 +117,14 @@ def triage(
         ),
     ] = None,
     analyst_model: Annotated[
-        ModelId, typer.Option(help="Model tier for Reachability/Exploitability/Adversary.")
-    ] = ModelId.HAIKU,
+        ModelTier, typer.Option(help="Model tier for Reachability/Exploitability/Adversary.")
+    ] = ModelTier.HAIKU,
     adjudicator_model: Annotated[
-        ModelId,
+        ModelTier,
         typer.Option(
             help="Model tier for the Adjudicator. Never lower this to save cost - CONTRIBUTING.md."
         ),
-    ] = ModelId.OPUS,
+    ] = ModelTier.OPUS,
     budget: Annotated[
         float, typer.Option(help="Hard spend ceiling in USD, checked before each finding.")
     ] = DEFAULT_BUDGET_USD,
@@ -179,8 +194,8 @@ def triage(
             config = build_pipeline_config(
                 prompts_dir=prompts,
                 repo_root=repo,
-                analyst_model=analyst_model,
-                adjudicator_model=adjudicator_model,
+                analyst_model=_MODEL_TIER_TO_ID[analyst_model],
+                adjudicator_model=_MODEL_TIER_TO_ID[adjudicator_model],
                 prompt_hashes=hash_prompt_dir(prompts),
             )
         except ProviderConfigError as exc:
@@ -190,8 +205,8 @@ def triage(
         config = build_pipeline_config(
             prompts_dir=prompts,
             repo_root=repo,
-            analyst_model=analyst_model,
-            adjudicator_model=adjudicator_model,
+            analyst_model=_MODEL_TIER_TO_ID[analyst_model],
+            adjudicator_model=_MODEL_TIER_TO_ID[adjudicator_model],
             prompt_hashes=hash_prompt_dir(prompts),
             api_key="dry-run-placeholder",
         )

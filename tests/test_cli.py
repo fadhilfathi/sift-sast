@@ -111,6 +111,23 @@ def _dry_run_args(sarif: Path, out: Path, tmp_path: Path) -> list[str]:
     ]
 
 
+def test_model_tier_options_accept_friendly_names(tmp_path: Path) -> None:
+    """--analyst-model/--adjudicator-model take HAIKU/OPUS, not the gateway's
+    raw model slug - the Action's inputs use these same friendly names."""
+    out = tmp_path / "triaged.sarif"
+    result = runner.invoke(
+        app,
+        [
+            *_dry_run_args(MINIMAL, out, tmp_path),
+            "--analyst-model",
+            "HAIKU",
+            "--adjudicator-model",
+            "OPUS",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
 def test_dry_run_warns_about_positional_identity(tmp_path: Path) -> None:
     """These findings detach on any line shift, and the user is told so."""
     out = tmp_path / "triaged.sarif"
