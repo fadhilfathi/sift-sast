@@ -351,6 +351,27 @@ apply to a newly added span type. It has to live in the data structure.
   eval class is seeded from. No prompt exists yet to test the model's behavior
   against it — that is P5.
 
+**Measured, P5 step 5: the delimiter itself was forgeable.** `as_untrusted_
+block()` wrapped `source` in delimiter text with no escaping of that same
+delimiter text if it already appeared inside `source`. Root cause: the
+method concatenated a fixed header, the verbatim source, and a fixed footer
+with no check that the source's own content couldn't contain a byte-identical
+copy of either. Measured directly before fixing: a source string containing
+a literal `<<<END UNTRUSTED SOURCE>>>` followed by fake instructions and a
+fake re-opening `<<<UNTRUSTED SOURCE...>>>` produced a rendered block with
+**4** occurrences of `<<<` where exactly **2** — the real header and footer
+— were correct. The two embedded fakes were byte-identical to the real
+markers, so nothing distinguished "this is the actual end of untrusted data"
+from "this is untrusted data claiming to be the end of untrusted data."
+Fixed by breaking every `<<<`/`>>>` run inside `source` with an inserted
+space before wrapping, so the two markers the method itself appends are
+always the only exact occurrences in the result. Defense in depth, not the
+primary control — the delimiting plus the JSON-schema output contract
+(`SECURITY.md`) is what actually keeps analyzed text from reaching a verdict
+— but a confusable delimiter was a real bug, not a hypothetical one, and it
+sat in code that had been reviewed and accepted twice before (P3's original
+implementation, P5 step 2's prompt-render tests) without anyone noticing.
+
 ## Stage 3 — adjudication
 
 | Agent | Question | Constraint |
@@ -364,17 +385,29 @@ The first three run concurrently on a shared, prompt-cached context prefix.
 
 ### The safety rule
 
-`FALSE_POSITIVE` requires `confidence >= 0.85` **and** no unrebutted Adversary
-objection **and** the Adversary having filed at least one objection in the
-first place **and** `context_completeness is not INSUFFICIENT` (D6, wired in
-P5 step 4 — see below). Otherwise the verdict becomes `NEEDS_HUMAN_REVIEW`,
-with `downgraded_from` and `downgrade_reason` recorded. Enforced in the
-schema, not in prompt text, so no model output can bypass it.
-`Adjudication.adversary_objection_count` is the field the objection-count
-condition reads; it defaults to zero, so a caller that forgets to report it
-gets the safe outcome rather than an accidental pass. `context_completeness`
-defaults to `None` and is treated the same as `INSUFFICIENT` for the same
-reason.
+`FALSE_POSITIVE` requires **five** independent conditions to hold at once.
+Otherwise the verdict becomes `NEEDS_HUMAN_REVIEW`, with `downgraded_from`
+and `downgrade_reason` recorded. All five live in one validator
+(`Adjudication.enforce_safety_rule`, `src/sift/models/verdict.py`), on the
+same downgrade path, so a model output — or a future caller — cannot satisfy
+four and skip the fifth. Each is proven in isolation in
+`tests/test_verdict_safety.py` (every other condition satisfied, so a
+failing test can only mean the one under test) and verified by deliberate
+mutation: removed, confirmed the matching test failed, reverted.
+
+| | Condition | Catches | Test |
+| --- | --- | --- | --- |
+| **B1** | `confidence < 0.85` | A model dismissing without being sure enough to justify it | `test_b1_low_confidence_alone_blocks` |
+| **B2** | An unrebutted Adversary objection | A real prosecution that was never actually answered with cited code | `test_b2_unrebutted_objection_alone_blocks` |
+| **B3** | `context_completeness is INSUFFICIENT` (or missing) | A dismissal resting on context the tool never finished retrieving (D6) | `test_b3_insufficient_completeness_alone_blocks` |
+| **B4** | Adversary filed zero objections | An Adversary never made to prosecute at all, indistinguishable by count alone from one that looked and found nothing | `test_b4_zero_adversary_objections_alone_blocks` |
+| **B5** | `len(open_objections) < adversary_objection_count` | A count that proves filing but not survival — objections actually filed, quietly dropped before the Adjudicator's own output | `test_dropped_adversary_objection_alone_blocks` |
+
+`Adjudication.adversary_objection_count` is the field B4/B5 read; it
+defaults to zero, so a caller that forgets to report it gets the safe
+outcome rather than an accidental pass. `context_completeness` defaults to
+`None` and is treated the same as `INSUFFICIENT` for the same reason. B1-B4
+were specified before P5 step 4 began; B5 was not — see below.
 
 **Measured, P5 step 4: counting objections is not the same as carrying them
 forward.** Building the "injection-compliant" fixture for step 4 — a
@@ -432,6 +465,31 @@ directly compare confidence values across agents** — doing so would silently
 average a belief against a prosecution-strength score and produce a number
 with no defensible meaning. The Adjudicator reads each agent's confidence
 only in the context of that agent's own role, never against the others'.
+
+### Why the adversarial fixtures exist
+
+Both B5 (above) and the delimiter escape (D9) were found by constructing
+adversarial fixtures — a hand-written model response deliberately shaped
+like a compromised or careless one, a hand-written source file deliberately
+shaped like an injection attempt — not by reading the code and reasoning
+about what it should do. Both passed every check that existed at the time
+they were written. B5's gap sat under a validator that already enforced four
+other conditions correctly; the delimiter escape sat in code that had
+already been written to spec, reviewed, and had tests passing against it in
+two earlier phases. Neither was a case of missing tests in some general
+sense — the surrounding code was well-tested. The specific adversarial shape
+that broke each one had simply never been constructed.
+
+This is the argument for building the fixture, not skipping it, the next
+time a "small" change touches the safety rule or the untrusted-data
+boundary: reasoning about what a compromised or malicious input would do is
+exactly the reasoning that produced both of these gaps by not being done.
+Writing the actual fixture — the fake dropped objection, the fake embedded
+delimiter — and running it through the real code is what found what
+reasoning about intent did not. A future maintainer under time pressure will
+be tempted to change `enforce_safety_rule` or `as_untrusted_block()` and
+verify by reading the diff. Both times that approach was tried here, it
+would have shipped the gap. Construct the fixture first.
 
 ## Stage 4 — emitters
 

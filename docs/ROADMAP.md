@@ -226,20 +226,26 @@ exist yet, and no architectural claim may lean on it.
 
 ---
 
-## P5 - Four-agent pipeline (in progress)
+## ☑ P5 — Four-agent pipeline
 
-**Status: zero-spend construction; D12 comparison unresolved.** The pipeline is being built and tested via offline and recorded-response fixtures only - no live model calls, no spend during construction. The P4 comparison harness (baseline prompt, runner, scoring) stays wired and runnable; settling D12 takes a future spend decision plus a live run, the same pattern as P4's unrun step 5. Until then every scored metric on both sides is **not yet measured**.
+**Status: zero-spend construction complete; D12 comparison unresolved.** The
+pipeline was built and tested entirely via offline and recorded-response
+fixtures - no live model calls, no spend during construction. The P4
+comparison harness (baseline prompt, runner, scoring) stays wired and
+runnable; settling D12 takes a future spend decision plus a live run, the
+same pattern as P4's unrun step 5. Every scored metric on both sides is
+**not yet measured**. `main` green at `ef7863f`, 589 tests passing.
 
 **Acceptance criteria**
 
-- [ ] Reachability, Exploitability, Adversary, Adjudicator implemented against the
+- [x] Reachability, Exploitability, Adversary, Adjudicator implemented against the
       provider interface
-- [ ] Async orchestration; the three analysts run concurrently
-- [ ] Prompt caching on the shared context prefix
-- [ ] The Adjudicator sees arguments with agent identities stripped
-- [ ] Per-finding cost and latency tracked and reported
-- [ ] Every cited `FileLineRef` is verified to exist before the verdict is accepted
-- [ ] Injection resistance, structural: the P3 bait survives into the prompt as
+- [x] Async orchestration; the three analysts run concurrently
+- [x] Prompt caching on the shared context prefix
+- [x] The Adjudicator sees arguments with agent identities stripped
+- [x] Per-finding cost and latency tracked and reported
+- [x] Every cited `FileLineRef` is verified to exist before the verdict is accepted
+- [x] Injection resistance, structural: the P3 bait survives into the prompt as
       delimited data and is structurally incapable of reaching the verdict.
       Achievable offline; a real acceptance criterion for this phase.
 
@@ -262,6 +268,42 @@ future spend decision:**
       to compare; the clause stands as this phase's standard for whoever runs the
       eval, not as something this phase itself can satisfy. Do not tune the eval to
       agree with the architecture.
+
+**Done means:** the pipeline exists, is structurally safe against every
+adversarial case constructed against it, and can measure itself the moment
+someone is willing to spend. It has not yet measured anything.
+
+**Scope notes**
+
+- *Four criteria above are genuinely unmet, not softened.* Scored-against-
+  baseline, the false-suppression-rate/dismissal-rate pair, the measured
+  injection-resistance rate, and the honesty clause all require a live run
+  against real model output. Each is built, wired, and covered by offline
+  tests against recorded-response fixtures, and each is explicitly marked
+  "unrun pending live evaluation" rather than checked off. This was decided
+  in step 1, before any of the four was attempted, so it could not be
+  relaxed after the fact to make the phase look more finished than it is.
+- **A fifth safety-rule condition was added that was not in this phase's
+  original scope.** `Adjudication.enforce_safety_rule` was specified with
+  four blocking conditions (confidence floor, unrebutted objection, D6
+  completeness, zero adversary objections). Building the injection-compliant
+  fixture in step 4 surfaced a fifth: the zero-objections check proved the
+  Adversary *filed* something, never that the Adjudicator's own output
+  *carried it forward* — a compromised or careless Adjudicator could report
+  an honest nonzero count while silently dropping the objections themselves,
+  passing every check that existed at the time. `len(open_objections) >=
+  adversary_objection_count` closes this. See `docs/ARCHITECTURE.md`'s "The
+  safety rule" and "Why the adversarial fixtures exist" for the full account.
+- *A real injection vector was found and fixed in the untrusted-data
+  delimiter itself, not just in agent behavior.* Source text containing the
+  literal delimiter strings reached the model unescaped - measured directly
+  as 4 occurrences of `<<<` in a rendered block where exactly 2 were
+  correct, before the fix. `CodeSpan.as_untrusted_block()` now breaks any
+  `<<<`/`>>>` run inside analyzed source before wrapping it, so the two
+  markers the method itself appends are always the only real ones. Defense
+  in depth - the delimiting plus the JSON-schema output contract is the
+  primary control - but a confusable delimiter was a genuine bug, not a
+  hypothetical one.
 
 ---
 
