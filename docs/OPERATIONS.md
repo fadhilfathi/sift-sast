@@ -44,6 +44,40 @@ Until then `main` is protected by convention only: `make gate` before every push
 and CI watched to green after. That is weaker than enforcement. Do not treat a
 green badge as a substitute for running the gate locally.
 
+## Pre-flip audit: settled findings, not re-flagged
+
+Two things a pre-flip audit will surface. Both were reviewed and settled
+before the public flip; record here so a future audit doesn't re-raise them
+as new.
+
+**`.gitignore` names `CLAUDE.md` and `.claude/`.** This is not an
+attribution concern. The rule this project enforces is about attribution —
+no trailers, no generated-by footers, nothing that reads as the tool
+claiming authorship of the code. It is not a rule against acknowledging
+that AI-assisted tooling was used at all, and that second goal would not be
+achievable or sensible anyway — a public security tool whose contributors
+use an AI assistant is unremarkable. A `.gitignore` entry for a tool's local
+config is the same category as `.vscode/` or `.idea/`: routine, expected,
+present in most mature `.gitignore` files regardless of which tool. Leaving
+it out would make the file worse — a contributor who opens this repo in
+Claude Code should get `CLAUDE.md`/`.claude/` untracked automatically, not
+have to add the entry themselves. Decision: keep as is, no history rewrite.
+
+**One historical commit message named a specific tool.** `2cb4083`
+(P4, "add cost estimation and the pre-call budget guard") originally read
+"Pricing sourced from the claude-api skill's live table" — naming a Claude
+Code skill used to source the pricing table. That crossed the actual line
+(a specific AI-tool artifact named as the source of project content, not a
+routine acknowledgment that tooling was used) and was corrected via an
+authorized one-time history rewrite: `git filter-repo --message-callback`,
+scoped to that exact four-word phrase, replacing it with "vendor pricing
+documentation's" and preserving everything else — the cache date, the
+`console.anthropic.com` cross-check note, and all surrounding reasoning.
+Tree content verified identical before and after (same tree SHA); no file
+changed, only that one commit's message. Mirror backup taken first and
+retained. New commit SHA `8e4af41` (was `2cb4083`); `main` force-pushed with
+`--force-with-lease` from `abb987e` to `8cdda05`.
+
 ## Verifying the SARIF emitter against Code Scanning
 
 SIFT must emit SARIF that GitHub Code Scanning accepts **and renders**. A `202`
