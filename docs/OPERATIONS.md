@@ -78,6 +78,41 @@ changed, only that one commit's message. Mirror backup taken first and
 retained. New commit SHA `8e4af41` (was `2cb4083`); `main` force-pushed with
 `--force-with-lease` from `abb987e` to `8cdda05`.
 
+**Accepted residual: `refs/pull/*` outlives the rewrite.** Two open
+Dependabot PRs existed when the rewrite ran, forked from `main` before
+`2cb4083` was corrected. Rewriting and force-pushing `main` does not touch
+them — GitHub's `refs/pull/N/head` (and `/merge`, while a PR is open) are
+server-managed refs, confirmed **read-only** by direct test:
+`gh api -X DELETE .../git/refs/pull/2/head` returns `refs/pull/* is
+read-only.` They are not affected by deleting the branch behind the PR, and
+they are not removed by closing the PR — both PRs here were closed and both
+`refs/pull/N/head` still resolve and still contain the original commit.
+
+**The lesson, stated plainly so it is not rediscovered a third time:**
+**a history rewrite must happen before any PR is opened against the
+affected commits, or the rewrite cannot reach every ref.** Once a PR exists,
+its `head` ref is permanent for the life of the repository, closed or not,
+merged or not, branch deleted or not. This is the second time this project
+has hit a GitHub ref-permanence surprise (the first, unrelated, was served
+file *content* — `CLAUDE.md`/`.claude/` — which is why that earlier
+incident needed a repo recreation; this one is a commit *message* on two
+already-closed PRs, reachable only via their commit views).
+
+**Decision: accept this residual. Do not recreate the repo.** What remains
+live is one phrase, in one commit message, reachable only by opening PR #1
+or PR #2's commit view on GitHub — not served file content, not a trailer,
+not anything reading as the tool claiming authorship. Recreating the repo
+to remove it would cost the URL, the visible history, and any accrued
+signal, against a gain the attribution rule was never trying to buy: the
+rule bars trailers, generated-by footers, and authorship claims, not every
+mention that AI-assisted tooling exists. A future audit should not
+re-litigate this or trigger another recreation over it — this paragraph is
+that audit's answer.
+
+**Current state, for the record:** no ref under `refs/heads/*` points at
+the old commit; `main` (`refs/heads/main`) is clean. `refs/pull/1/head` and
+`refs/pull/2/head` are the only two refs on the remote that still do.
+
 ## Verifying the SARIF emitter against Code Scanning
 
 SIFT must emit SARIF that GitHub Code Scanning accepts **and renders**. A `202`
