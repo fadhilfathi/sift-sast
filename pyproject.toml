@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sift-sast"
-version = "0.0.0"
+version = "0.1.0"
 description = "Triage SARIF findings with AST-grounded context and multi-agent LLM adjudication."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
