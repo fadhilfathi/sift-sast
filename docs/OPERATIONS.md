@@ -7,7 +7,7 @@ reproducible rather than living only in someone's browser tab.
 
 | Setting | State | Note |
 | --- | --- | --- |
-| Visibility | private | Flips public at v0.1.0, once the README carries measured numbers. |
+| Visibility | **public** | Flipped at v0.1.0, 2026-09-16, once the pre-flip audit came back clean (one accepted residual — see below). |
 | Issues | on | |
 | Discussions | on | |
 | Wiki, Projects | off | Docs live in `docs/`. |
@@ -15,34 +15,65 @@ reproducible rather than living only in someone's browser tab.
 | Dependabot security updates | on | |
 | Dependabot version updates | on | `.github/dependabot.yml`, pip + github-actions |
 | Delete branch on merge | on | |
-| Secret scanning | **unavailable** | Needs a public repo or GHAS. The `gitleaks` job covers it meanwhile, scanning full history on every run. |
-| Code scanning (CodeQL) | **unavailable** | Needs a public repo or GHAS. The job is gated on `repository.visibility == 'public'` and enables itself on the flip. |
-| Dependency review | **unavailable** | Same gate, same reason. |
-| Branch protection | **unavailable** | Needs GitHub Pro or a public repo. See below. |
+| Secret scanning | **on** | Enabled at the flip (was GHAS-gated while private). Push protection also on. |
+| Code scanning (CodeQL) | **on** | Self-enabled at the flip (`repository.visibility == 'public'`). First real run: 8 alerts — see below. |
+| Dependency review | **on** | Same gate; fires on the next real pull request (its own condition is the `pull_request` event, not visibility alone). |
+| Branch protection | **on** | Ruleset id `23525230`, applied post-flip. See below. |
 
 ## Branch protection
 
-`gh api -X PUT repos/fadhilfathi/sift-sast/branches/main/protection` and the rulesets
-API both return:
-
-```
-403 Upgrade to GitHub Pro or make this repository public to enable this feature.
-```
-
-The intended ruleset is committed at [`.github/ruleset.json`](../.github/ruleset.json):
-required checks `py3.11`, `py3.12`, `build`, `gitleaks`; PR required before merge;
-linear history; no force pushes; no deletions; conversation resolution required.
-
-Apply it the moment the repo goes public or the account upgrades:
+Applied 2026-09-16, immediately after the public flip (the 403 that blocked
+this while private — `Upgrade to GitHub Pro or make this repository public
+to enable this feature` — resolved as expected). Ruleset id `23525230`,
+`enforcement: active`, verified by reading it back rather than trusting the
+201: required checks `py3.11`, `py3.12`, `build`, `gitleaks`; PR required
+before merge; no force pushes; no deletions; conversation resolution
+required. Source of truth: [`.github/ruleset.json`](../.github/ruleset.json).
 
 ```bash
-gh api -X POST repos/fadhilfathi/sift-sast/rulesets --input .github/ruleset.json
-gh api repos/fadhilfathi/sift-sast/rulesets --jq '.[]|{id,name,enforcement}'
+gh api repos/fadhilfathi/sift-sast/rulesets/23525230 --jq '{name, enforcement, rules: [.rules[].type]}'
 ```
 
-Until then `main` is protected by convention only: `make gate` before every push,
-and CI watched to green after. That is weaker than enforcement. Do not treat a
-green badge as a substitute for running the gate locally.
+Before this was applied, `main` was protected by convention only: `make
+gate` before every push, CI watched to green after. That history is real —
+every commit through v0.1.0 was gated that way, not by enforcement — and is
+why the convention is worth keeping even now that enforcement exists.
+
+## CodeQL self-scan: first real-world SAST output, triaged
+
+The public flip's first CodeQL run produced this project's first-ever
+real-world SAST findings — 8 alerts. Worth recording as its own event: this
+is the first time anything has pointed a real scanner at this repo and
+gotten real output back, as opposed to the fixture corpus this project
+built for itself.
+
+Triage below is a **human**, applying the tool's own standard by hand — not
+SIFT's output. SIFT has never adjudicated a real finding; that remains true
+after this. See the README's "We ran CodeQL against ourselves" section for
+the two cases worth reading in full (the injection-bait fixture, and the
+synthetic eval-dataset snapshots); this is the complete list.
+
+| # | Rule | Location | Verdict | Why |
+| --- | --- | --- | --- | --- |
+| 1 | `py/clear-text-logging-sensitive-data` | `evals/dataset/snapshots/synth-v1/log_secret.py:11` | FALSE_POSITIVE | Real pattern (`logger.info(..., password)`), unreachable: file is read as text by the dataset builder and context builder, never imported or executed anywhere in `src/` or the test suite. |
+| 2 | `py/weak-sensitive-data-hashing` (MD5) | `hash_md5.py:11` | FALSE_POSITIVE | Same reasoning: `beta_check_password`'s MD5 use is a real anti-pattern, unreachable. |
+| 3 | `py/weak-sensitive-data-hashing` (SHA1) | `hash_sha1.py:6` | FALSE_POSITIVE | Same reasoning. |
+| 4 | `py/command-line-injection` | `tests/fixtures/python_project/src/app.py:27` | FALSE_POSITIVE | The P3 injection-bait fixture. Unreachable (never imported/run); the adjacent "reviewed by security" comment is not part of the reasoning — see the README. |
+| 5 | `py/insecure-temporary-file` | `temp_mktemp.py:6` | FALSE_POSITIVE | `tempfile.mktemp`'s race is real; unreachable. |
+| 6 | `py/overly-permissive-file` | `perm_chmod.py:13` | FALSE_POSITIVE | `chmod 0o777` is real; unreachable. |
+| 7 | `py/tarslip` | `tar_extract.py:10` | FALSE_POSITIVE | Unfiltered `extractall` is real; unreachable. |
+| 8 | `py/request-without-cert-validation` | `tls_verify_false.py:10` | FALSE_POSITIVE | `verify=False` is real; unreachable. |
+
+All 7 `evals/dataset/snapshots/synth-v1/` files are deliberate TP/FP twin
+pairs built by `evals/dataset/build.py` for the D10 labeled dataset (see
+`evals/dataset/README.md`); each carries a header stating exactly that.
+Reachability for all 8 verified by `grep` across `src/`, `tests/`, and the
+eval tooling — referenced only as path strings passed to
+`build_context_bundle` (tree-sitter, text-only) or dataset entries, never
+`import`ed, `exec`'d, or run. None of the 8 touched `sift.paths`,
+`sift.ingest.fingerprint`, `sift.context.redact`, or the safety rule — the
+no-fallback areas. A real finding there would have been fixed before this
+table was written, not explained into a table row.
 
 ## Pre-flip audit: settled findings, not re-flagged
 
